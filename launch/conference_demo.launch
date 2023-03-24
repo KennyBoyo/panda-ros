@@ -3,10 +3,13 @@
   <!--  -->
   <include file="$(find mrn_kinect_bin)/launch/kinect_demo.launch" ></include>
 
-  <arg name="robot_ip" default="172.16.0.104"/>
+  <arg name="robot_ips" default="172.16.0.104 172.16.0.103"/>
+  <arg name="tracking_robot_ip" default="172.16.0.104"/>
+  <arg name="impedance_robot_ip" default="172.16.0.103"/>
+
   <arg name="load_gripper" default="true" />
   <include file="$(find franka_control)/launch/franka_control.launch" >
-    <arg name="robot_ip" value="$(arg robot_ip)" />
+    <arg name="robot_ip" value="$(arg robot_ips)" />
     <arg name="load_gripper" value="$(arg load_gripper)" />
   </include>
 
@@ -25,4 +28,10 @@
   <node name="mrn_openpose_demo" pkg="mrn_openpose" type="mrn_openpose_demo" args="/registered_097377233947/image_raw /undistorted_097377233947/image_raw 097377233947" />
   <!-- <node name="mrn_openpose_demo" pkg="mrn_openpose" type="mrn_openpose_demo" args="/registered_226287140347/image_raw /undistorted_226287140347/image_raw 226287140347" /> -->
   <!-- <include file="$(find mrn_kinect_bin)/launch/kinect_demo.launch" ></include> -->
+
+  <rosparam command="load" file="$(find panda_ros)/config/franka_panda_controller_swc.yaml" />
+  <node name="controller_spawner2" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="cartesian_impedance_equilibrium_controller"/>
+  <node name="equilibrium_publisher" pkg="panda_ros" type="equilibrium_publisher.py" required="true" >
+    <param name="link_name" value="panda_link0" />
+  </node>
 </launch>

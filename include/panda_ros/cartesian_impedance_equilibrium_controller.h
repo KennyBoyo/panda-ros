@@ -8,7 +8,7 @@
 #include <vector>
 
 #include <controller_interface/multi_interface_controller.h>
-#include <std_msgs/Int16MultiArray.h>
+#include <std_msgs/Int8.h>
 #include <dynamic_reconfigure/server.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <hardware_interface/joint_command_interface.h>
@@ -22,7 +22,7 @@
 #include <franka_hw/franka_model_interface.h>
 #include <franka_hw/franka_state_interface.h>
 
-namespace franka_panda_controller_swc {
+namespace panda_ros {
 
 class CartesianImpedanceEquilibriumController : public controller_interface::MultiInterfaceController<
                                                 franka_hw::FrankaModelInterface,
@@ -43,6 +43,7 @@ class CartesianImpedanceEquilibriumController : public controller_interface::Mul
   std::unique_ptr<franka_hw::FrankaModelHandle> model_handle_;
   std::vector<hardware_interface::JointHandle> joint_handles_;
 
+  int mode{0};
   double filter_params_{0.005};
   double nullspace_stiffness_{20.0};
   double nullspace_stiffness_target_{20.0};
@@ -66,10 +67,13 @@ class CartesianImpedanceEquilibriumController : public controller_interface::Mul
                                uint32_t level);
   void equilibriumStiffnessCallback(
                                 const mrn_panda::ImpedanceParams& config);
+  void impedanceModeCallback(
+                                const std_msgs::Int8& config);
 
   // Equilibrium pose subscriber
   ros::Subscriber sub_equilibrium_pose_;
   ros::Subscriber sub_equilibrium_stiffness_;
+  ros::Subscriber sub_impedance_mode_;
   void equilibriumPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg);
 };
 

@@ -56,7 +56,7 @@ cartesian_impedance_controller_NR:
         - panda_joint6
         - panda_joint7
 
-cartesian_impedance_controller:
+cartesian_impedance_controller_1:
     type: franka_panda_controller_swc/CartesianImpedanceController
     arm_id: panda
     joint_names:
@@ -69,7 +69,7 @@ cartesian_impedance_controller:
         - panda_joint7
 
 cartesian_impedance_equilibrium_controller:
-    type: panda_ros/CartesianImpedanceEquilibriumController
+    type: franka_panda_controller_swc/CartesianImpedanceEquilibriumController
     arm_id: panda
     joint_names:
         - panda_joint1

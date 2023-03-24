@@ -1,12 +1,11 @@
 // Copyright (c) 2017 Franka Emika GmbH
 // Use of this source code is governed by the Apache-2.0 license, see LICENSE
-#include <franka_panda_controller_swc/cartesian_impedance_equilibrium_controller.h>
+#include <panda_ros/cartesian_impedance_equilibrium_controller.h>
 
 #include <cmath>
 #include <memory>
 
 #include <controller_interface/controller_base.h>
-#include <std_msgs/Int16MultiArray.h>
 #include <ros/console.h>
 #include <franka/robot_state.h>
 #include <pluginlib/class_list_macros.h>
@@ -15,7 +14,7 @@
 
 #include <franka_panda_controller_swc/pseudo_inversion.h>
 
-namespace franka_panda_controller_swc {
+namespace panda_ros {
 
 bool CartesianImpedanceEquilibriumController::init(hardware_interface::RobotHW* robot_hw,
                                                ros::NodeHandle& node_handle) {
@@ -29,6 +28,10 @@ bool CartesianImpedanceEquilibriumController::init(hardware_interface::RobotHW* 
 
   sub_equilibrium_stiffness_ = node_handle.subscribe(
       "equilibrium_stiffness", 20, &CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback, this,
+      ros::TransportHints().reliable().tcpNoDelay());
+
+  sub_impedance_mode_= node_handle.subscribe(
+      "impedance_mode", 20, &CartesianImpedanceEquilibriumController::impedanceModeCallback, this,
       ros::TransportHints().reliable().tcpNoDelay());
 
   // sub_equilibrium_stiffness_ = node_handle.publish(
@@ -116,10 +119,10 @@ bool CartesianImpedanceEquilibriumController::init(hardware_interface::RobotHW* 
 
   cartesian_stiffness_.setZero();
   cartesian_damping_.setZero();
+  mode = 0;
 
-  std::cout << "Hello world" << std::endl;
 
-  // ROS_DEBUG("Hello %s", "World");
+  std::cout << "MODE 0" << mode << std::endl;
   
   return true;
 }
@@ -186,7 +189,7 @@ void CartesianImpedanceEquilibriumController::update(const ros::Time& /*time*/,
   // pseudoinverse for nullspace handling
   // kinematic pseuoinverse
   Eigen::MatrixXd jacobian_transpose_pinv;
-  pseudoInverse(jacobian.transpose(), jacobian_transpose_pinv);
+  franka_panda_controller_swc::pseudoInverse(jacobian.transpose(), jacobian_transpose_pinv);
 
   // Cartesian PD control with damping ratio = 1
   tau_task << jacobian.transpose() *
@@ -250,32 +253,74 @@ void CartesianImpedanceEquilibriumController::complianceParamCallback(
 void CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback(
     const mrn_panda::ImpedanceParams& config) {
   
-
-  Eigen::Matrix3d stiffness_tl = Eigen::Matrix3d::Zero(3, 3);
-  for (int i = 0; i < 3; i++ ) {
-      stiffness_tl.col(i).row(i) << config.data[i].value;
-  }
-
-  cartesian_stiffness_target_.setIdentity();
-  cartesian_stiffness_target_.topLeftCorner(3, 3)
-      << stiffness_tl;
-      // << config.data[0].value * Eigen::Matrix3d::Identity();
-  cartesian_stiffness_target_.bottomRightCorner(3, 3)
-      << config.data[3].value * Eigen::Matrix3d::Identity();
-  cartesian_damping_target_.setIdentity();
-  // Damping ratio = 1
-
-  // Eigen::Matrix3d damping_tl = Eigen::Matrix3d::Zero(3, 3);
-  // for (int i = 0; i < 3; i++ ) {
-  //     damping_tl.col(i).row(i) << 3.0 * sqrt(config.data[i].value);
-  // }
   
-  cartesian_damping_target_.topLeftCorner(3, 3)
-      // << damping_tl;
-      << 3.0 * sqrt(3*config.data[4].value) * Eigen::Matrix3d::Identity();
-  cartesian_damping_target_.bottomRightCorner(3, 3)
-      << 3.0 * sqrt(config.data[4].value) * Eigen::Matrix3d::Identity();
-  nullspace_stiffness_target_ = config.data[2].value;
+  std::cout << "MODE " << mode << std::endl;
+
+  if (mode == 0) {
+    std::cout << "LOOP MODE 0" << std::endl;
+    cartesian_stiffness_target_.setIdentity();
+    cartesian_stiffness_target_.topLeftCorner(3, 3)
+        << 0 * Eigen::Matrix3d::Identity();
+    cartesian_stiffness_target_.bottomRightCorner(3, 3)
+        << 0 * Eigen::Matrix3d::Identity();
+    cartesian_damping_target_.setIdentity();
+    
+    cartesian_damping_target_.topLeftCorner(3, 3)
+        << 0 * Eigen::Matrix3d::Identity();
+    cartesian_damping_target_.bottomRightCorner(3, 3)
+        << 0 * Eigen::Matrix3d::Identity();
+    // nullspace_stiffness_target_ = config.data[5].value/5;
+    nullspace_stiffness_target_ = 0;
+  } else if (mode == 1) {
+    Eigen::Matrix3d stiffness_tl = Eigen::Matrix3d::Zero(3, 3);
+    for (int i = 0; i < 3; i++ ) {
+        stiffness_tl.col(i).row(i) << config.data[i].value;
+    }
+
+    // Eigen::Matrix3d stiffness_br = Eigen::Matrix3d::Zero(3, 3);
+    // for (int i = 0; i < 3; i++ ) {
+    //     stiffness_tl.col(i+3).row(i+3) << config.data[i].value;
+    // }
+
+    cartesian_stiffness_target_.setIdentity();
+    cartesian_stiffness_target_.topLeftCorner(3, 3)
+        << stiffness_tl;
+        // << config.data[0].value * Eigen::Matrix3d::Identity();
+    cartesian_stiffness_target_.bottomRightCorner(3, 3)
+        // << stiffness_br;
+        << config.data[3].value * Eigen::Matrix3d::Identity();
+    cartesian_damping_target_.setIdentity();
+    // Damping ratio = 1
+
+    Eigen::Matrix3d damping_tl = Eigen::Matrix3d::Zero(3, 3);
+    for (int i = 0; i < 3; i++ ) {
+        damping_tl.col(i).row(i) << 3.0 * sqrt(config.data[i].value);
+    }
+    
+    cartesian_damping_target_.topLeftCorner(3, 3)
+        << damping_tl;
+        // << 3.0 * sqrt(3*config.data[3].value) * Eigen::Matrix3d::Identity();
+    cartesian_damping_target_.bottomRightCorner(3, 3)
+        << 3.0 * sqrt(config.data[3].value) * Eigen::Matrix3d::Identity();
+    // nullspace_stiffness_target_ = config.data[4].value/5;
+    nullspace_stiffness_target_ = 0;
+  }
+  else {
+    cartesian_stiffness_target_.setIdentity();
+    cartesian_stiffness_target_.topLeftCorner(3, 3)
+        << 0 * Eigen::Matrix3d::Identity();
+    cartesian_stiffness_target_.bottomRightCorner(3, 3)
+        << 0 * Eigen::Matrix3d::Identity();
+    cartesian_damping_target_.setIdentity();
+    
+    cartesian_damping_target_.topLeftCorner(3, 3)
+        << 0 * Eigen::Matrix3d::Identity();
+    cartesian_damping_target_.bottomRightCorner(3, 3)
+        << 0 * Eigen::Matrix3d::Identity();
+    // nullspace_stiffness_target_ = config.data[5].value/5;
+    nullspace_stiffness_target_ = 0;
+
+  }
 }
 
 void CartesianImpedanceEquilibriumController::equilibriumPoseCallback(
@@ -291,7 +336,14 @@ void CartesianImpedanceEquilibriumController::equilibriumPoseCallback(
   }
 }
 
+void CartesianImpedanceEquilibriumController::impedanceModeCallback(
+    const std_msgs::Int8& msg) {
+
+  std::cout << "MODE " << mode << std::endl;
+  mode = msg.data;
+}
+
 }  // namespace franka_example_controllers
 
-PLUGINLIB_EXPORT_CLASS(franka_panda_controller_swc::CartesianImpedanceEquilibriumController,
+PLUGINLIB_EXPORT_CLASS(panda_ros::CartesianImpedanceEquilibriumController,
                        controller_interface::ControllerBase)

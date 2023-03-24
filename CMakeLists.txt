@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.4)
-project(mrn_panda)
+project(panda_ros)
 
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_CXX_STANDARD 14)
@@ -43,7 +43,7 @@ generate_dynamic_reconfigure_options(
 
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES mrn_panda
+  LIBRARIES panda_ros
   CATKIN_DEPENDS
     controller_interface
     dynamic_reconfigure
@@ -61,7 +61,7 @@ catkin_package(
   DEPENDS Franka
 )
 
-add_library(mrn_panda
+add_library(panda_ros
   src/joint_impedance_controller.cpp
   src/force_controller_NR.cpp
   src/cartesian_impedance_controller_NR.cpp
@@ -72,7 +72,7 @@ add_library(mrn_panda
   src/dual_arm_cartesian_impedance_controller.cpp
 )
 
-add_dependencies(mrn_panda
+add_dependencies(panda_ros
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_generate_messages_cpp
@@ -80,23 +80,23 @@ add_dependencies(mrn_panda
   ${PROJECT_NAME}_gencfg
 )
 
-target_link_libraries(mrn_panda PUBLIC
+target_link_libraries(panda_ros PUBLIC
   ${Franka_LIBRARIES}
   ${catkin_LIBRARIES}
 )
 
-target_include_directories(mrn_panda SYSTEM PUBLIC
+target_include_directories(panda_ros SYSTEM PUBLIC
   ${Franka_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
 )
-target_include_directories(mrn_panda PUBLIC
+target_include_directories(panda_ros PUBLIC
   include
   ${catkin_INCLUDE_DIRS}
 )
 
 ## Installation
-install(TARGETS mrn_panda
+install(TARGETS panda_ros
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
@@ -107,7 +107,7 @@ install(DIRECTORY launch
 install(DIRECTORY config
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
-install(FILES mrn_panda_plugin.xml
+install(FILES panda_ros_plugin.xml
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 catkin_install_python(
@@ -131,9 +131,9 @@ if(CLANG_TOOLS)
     ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
   )
-  add_format_target(mrn_panda FILES ${SOURCES} ${HEADERS})
-  add_tidy_target(mrn_panda
+  add_format_target(panda_ros FILES ${SOURCES} ${HEADERS})
+  add_tidy_target(panda_ros
     FILES ${SOURCES}
-    DEPENDS mrn_panda
+    DEPENDS panda_ros
   )
 endif()

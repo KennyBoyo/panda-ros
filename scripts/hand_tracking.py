@@ -52,7 +52,7 @@ class hand_tracker:
   #   self.pub.publish(self.robot_pose)
 
   def wrist_callback(self, wrist):
-    # self.transform = self.tf_buffer.lookup_transform("frame_color_097377233947", "panda_link0", rospy.Time.now())
+    self.transform = self.tf_buffer.lookup_transform("frame_color_097377233947", "panda_link0", rospy.Time.now())
     self.vector = self.tf_buffer.transform(wrist, "panda_link0")
     
     self.robot_pose.pose.position.x = max([min([self.vector.point.x,

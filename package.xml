@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>mrn_panda</name>
+  <name>panda_ros</name>
   <version>0.7.0</version>
-  <description>The mrn_panda package</description>
-  <maintainer email="s4555103@uq.net.au">Jack McNamara</maintainer>
+  <description>The panda_ros package</description>
+  <maintainer email="s4581696@uq.net.au">Jun Khai Chooi</maintainer>
   <license>Apache 2.0</license>
 
   <author>Shih-Wen Chen</author>
@@ -48,7 +48,7 @@
   <!-- Use doc_depend for packages you need only for building documentation: -->
   <!-- Other tools can request additional information be placed here -->
   <export>
-	<controller_interface plugin="${prefix}/mrn_panda_plugin.xml"/>
+	<controller_interface plugin="${prefix}/panda_ros_plugin.xml"/>
   </export>
 </package>
   
