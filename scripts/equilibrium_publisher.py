@@ -10,7 +10,7 @@ from dynamic_reconfigure.msg import Config, DoubleParameter, GroupState
 from std_msgs.msg import Int16MultiArray
 from franka_msgs.msg import FrankaState
 import tf.transformations as tr
-from mrn_panda.msg import ImpedanceParams
+from panda_ros.msg import ImpedanceParams
 
 
 
