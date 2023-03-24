@@ -13,7 +13,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <hardware_interface/joint_command_interface.h>
 #include <hardware_interface/robot_hw.h>
-#include <mrn_panda/ImpedanceParams.h>
+#include <panda_ros/ImpedanceParams.h>
 #include <ros/node_handle.h>
 #include <ros/time.h>
 #include <Eigen/Dense>
