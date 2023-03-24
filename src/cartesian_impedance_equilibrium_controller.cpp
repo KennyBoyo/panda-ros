@@ -9,7 +9,7 @@
 #include <ros/console.h>
 #include <franka/robot_state.h>
 #include <pluginlib/class_list_macros.h>
-#include <mrn_panda/ImpedanceParams.h>
+#include <panda_ros/ImpedanceParams.h>
 #include <ros/ros.h>
 
 #include <franka_panda_controller_swc/pseudo_inversion.h>
@@ -251,7 +251,7 @@ void CartesianImpedanceEquilibriumController::complianceParamCallback(
 }
 
 void CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback(
-    const mrn_panda::ImpedanceParams& config) {
+    const panda_ros::ImpedanceParams& config) {
   
   
   std::cout << "MODE " << mode << std::endl;

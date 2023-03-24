@@ -66,7 +66,7 @@ class CartesianImpedanceEquilibriumController : public controller_interface::Mul
   void complianceParamCallback(franka_example_controllers::compliance_paramConfig& config,
                                uint32_t level);
   void equilibriumStiffnessCallback(
-                                const mrn_panda::ImpedanceParams& config);
+                                const panda_ros::ImpedanceParams& config);
   void impedanceModeCallback(
                                 const std_msgs::Int8& config);
 
