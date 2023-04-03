@@ -34,13 +34,6 @@ bool CartesianImpedanceEquilibriumController::init(hardware_interface::RobotHW* 
       "impedance_mode", 20, &CartesianImpedanceEquilibriumController::impedanceModeCallback, this,
       ros::TransportHints().reliable().tcpNoDelay());
 
-  // sub_equilibrium_stiffness_ = node_handle.publish(
-  //     "abc", 20, &sts_msgs::In, this,
-  //     ros::TransportHints().reliable().tcpNoDelay());
-
-
-  
-
   std::string arm_id;
   if (!node_handle.getParam("arm_id", arm_id)) {
     ROS_ERROR_STREAM("CartesianImpedanceEquilibriumController: Could not read parameter arm_id");
@@ -213,8 +206,8 @@ void CartesianImpedanceEquilibriumController::update(const ros::Time& /*time*/,
       filter_params_ * cartesian_stiffness_target_ + (1.0 - filter_params_) * cartesian_stiffness_;
   cartesian_damping_ =
       0.5* filter_params_ * cartesian_damping_target_ + (1.0 - filter_params_) * cartesian_damping_;
-  nullspace_stiffness_ =
-      filter_params_ * nullspace_stiffness_target_ + (1.0 - filter_params_) * nullspace_stiffness_;
+  nullspace_stiffness_ = 0 *(
+      filter_params_ * nullspace_stiffness_target_ + (1.0 - filter_params_) * nullspace_stiffness_);
   std::lock_guard<std::mutex> position_d_target_mutex_lock(
       position_and_orientation_d_target_mutex_);
   position_d_ = filter_params_ * position_d_target_ + (1.0 - filter_params_) * position_d_;
