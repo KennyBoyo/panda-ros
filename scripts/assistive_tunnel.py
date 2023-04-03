@@ -17,6 +17,8 @@ px = 12
 py = 13
 pz = 14
 
+K_default = np.diag([1,1,1,0,0,0])
+K_default = np.array([1,1,1])
 
 def transformation_matrix_to_PoseStamped(trans_mat, frame_id: str) -> PoseStamped:
 	msg = PoseStamped()
@@ -65,7 +67,7 @@ def transformation_matrix_to_TransformStamped(trans_mat, frame_id: str, child_id
 	return msg
 
 class AssistiveTunnelController():
-	def __init__(self, tunnelRadius: np.double):
+	def __init__(self, tunnelRadius: np.double, k_min, k_max):
 		self.tunnelRadius = tunnelRadius
 		self.initialisedTrajectory = False 
 
@@ -74,6 +76,10 @@ class AssistiveTunnelController():
 		self.equilibrium_position_publisher = rospy.Publisher("/cartesian_impedance_equilibrium_controller/equilibrium_pose", PoseStamped)
 		self.stiffness_matrix_publisher = rospy.Publisher("/cartesian_impedance_equilibrium_controller/equilibrium_stiffness", ImpedanceParams)
 		self.trajectory_publisher = rospy.Publisher("/assistance_tunnel/desired_trajectory", Path, queue_size=10)
+
+		self.k_min = k_min
+		self.k_max = k_max
+		self.f_fault_tolerance_stiffness = lambda d : k_min + ((k_max - k_min)/tunnelRadius)*(d-tunnelRadius)
 
 	def trajectory_generator(self, x0, y0, z0, n):
 		traj_position = np.zeros((n, 3))
@@ -111,51 +117,79 @@ class AssistiveTunnelController():
 				self.pathMsg.poses.append(new_pose)
 	
 	def step(self, msg: FrankaState):
-		trans_mat = msg.O_T_EE
+
+		T_current = msg.O_T_EE
 
 		# Generate trajectory (only run once)
 		if not self.initialisedTrajectory:
-			self.initialise_trajectory(trans_mat)
+			self.initialise_trajectory(T_current)
 			self.initialisedTrajectory = True
 
 		# Publish trajectory for visualisation
 		self.pathMsg.header.stamp = rospy.Time.now()
 		self.trajectory_publisher.publish(self.pathMsg)
 
-		pos = np.array([trans_mat[px], trans_mat[py], trans_mat[pz]])
-		min_idx = self.nearest_trajectory_point_idx(pos)
-		self.visualise_nearest_trajectory_point(min_idx, trans_mat)
+		p_current = np.array([T_current[px], T_current[py], T_current[pz]])
+		min_idx, p_min, d_min = self.nearest_point_on_trajectory(p_current)
 
-	def nearest_trajectory_point_idx(self, pos: np.array) -> int:
+		K, p_reference = self.get_tolerance_tunnel_model_update_paramaters(d_min, p_min, p_current)
+		self.visualise_nearest_trajectory_point(p_reference, T_current)
+		
+
+	def nearest_point_on_trajectory(self, pos: np.array):
+
 		# pos is the current [x,y,z] position of the Franka EFF
 		delta = self.trajectory - pos
 		dist = np.einsum('ij,ij->i', delta, delta)
-		return np.argmin(dist)
+		
+		min_idx = np.argmin(dist)
+		d_min = dist[min_idx]
+		p_min = self.trajectory[min_idx]
+		return min_idx, p_min, d_min
 
-	def visualise_nearest_trajectory_point(self, npIDX: int, trans_mat):
+	def visualise_nearest_trajectory_point(self, p_ref, trans_mat):
 	
 		br = tf2_ros.TransformBroadcaster()
 		tf = transformation_matrix_to_TransformStamped(trans_mat, "panda_link0", "pNearest")
 
 		# Change translation to the nearest position on the trajectory
-		x, y, z = self.trajectory[npIDX, : ]
-		nearestPos = Vector3(x,y,z)
-		tf.transform.translation = nearestPos
+		x, y, z = p_ref
+		referencePosition = Vector3(x,y,z)
+		tf.transform.translation = referencePosition
 		br.sendTransform(tf)
 
-	def get_stiffness(self, d: np.double):
+	def get_tolerance_tunnel_model_update_paramaters(self, d: np.double, p_min, p_current):
+		
+		# Equal stiffness of magnitude k is applied to the x, y and z axes.  
 		if d < self.tunnelRadius:
-			pass
+			# Within inner constant force tunnel.
+			k = self.k_min
+			p_eqm = p_current
+
 		elif d < 2 * self.tunnelRadius:
-			# In 
-			pass
+			# Inside fault tolerant region. Use fault tunnel stiffness.
+			k = self.f_fault_tolerance_stiffness(d)
+			p_eqm = p_min
+
 		else:
-			# In fault zone
-		pass
+			# In fault zone.
+			k = self.k_max
+			p_eqm = p_min 
+
+		# Stiffness matrix K, is 6x6
+		K_stiffness = K_default * k
+
+		return K_stiffness, p_eqm
+	
+
+	def get_distance_model_update_parameters(self, d: np.double, p_min, p_current):
+		
+		# Overall assistance 
+		return K_default * self.k_max, p_min
 
 if __name__ == '__main__':
 	rospy.init_node('assistance_tunnel', anonymous=True, log_level=rospy.DEBUG)
-	obc = AssistiveTunnelController(tunnelRadius=0.07)
+	obc = AssistiveTunnelController(tunnelRadius=0.07, k_min=10, k_max = 150)
 	try:
 		rospy.spin()
 	except KeyboardInterrupt:
