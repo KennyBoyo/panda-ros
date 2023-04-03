@@ -12,6 +12,7 @@ from copy import deepcopy
 import numpy as np
 import tf2_ros
 
+PARENT_FRAME = "panda_link0"
 # X, Y and Z elements in Float64 Tmatrix (FrankaState)
 px = 12
 py = 13
@@ -96,7 +97,7 @@ class AssistiveTunnelController():
 		if not self.initialisedTrajectory:
 			trans_mat = t0
 
-			originalPose = transformation_matrix_to_PoseStamped(trans_mat, "panda_link0")
+			originalPose = transformation_matrix_to_PoseStamped(trans_mat, PARENT_FRAME)
 
 			# Initialise Trajectory
 			self.trajectory = self.trajectory_generator(x0 = trans_mat[px],\
@@ -106,7 +107,7 @@ class AssistiveTunnelController():
 			# Create nav_msgs Path
 			self.pathMsg = Path()
 			self.pathMsg.header.stamp = rospy.Time.now()
-			self.pathMsg.header.frame_id = "panda_link0"
+			self.pathMsg.header.frame_id = PARENT_FRAME
 
 			for coord in self.trajectory:
 				new_pose = deepcopy(originalPose)
@@ -125,16 +126,18 @@ class AssistiveTunnelController():
 			self.initialise_trajectory(T_current)
 			self.initialisedTrajectory = True
 
-		# Publish trajectory for visualisation
-		self.pathMsg.header.stamp = rospy.Time.now()
-		self.trajectory_publisher.publish(self.pathMsg)
-
 		p_current = np.array([T_current[px], T_current[py], T_current[pz]])
 		min_idx, p_min, d_min = self.nearest_point_on_trajectory(p_current)
 
 		K, p_reference = self.get_tolerance_tunnel_model_update_paramaters(d_min, p_min, p_current)
-		self.visualise_nearest_trajectory_point(p_reference, T_current)
 		
+		# Publish updated parameters
+		## Equilibrium Posit
+
+		# Publish trajectory and nearest point for visualisation
+		self.pathMsg.header.stamp = rospy.Time.now()
+		self.trajectory_publisher.publish(self.pathMsg)
+		self.visualise_nearest_trajectory_point(p_reference, T_current)
 
 	def nearest_point_on_trajectory(self, pos: np.array):
 
@@ -150,9 +153,9 @@ class AssistiveTunnelController():
 	def visualise_nearest_trajectory_point(self, p_ref, trans_mat):
 	
 		br = tf2_ros.TransformBroadcaster()
-		tf = transformation_matrix_to_TransformStamped(trans_mat, "panda_link0", "pNearest")
+		tf = transformation_matrix_to_TransformStamped(trans_mat, PARENT_FRAME, "p_ref")
 
-		# Change translation to the nearest position on the trajectory
+		# Change translation to the nearest reference position on the trajectory
 		x, y, z = p_ref
 		referencePosition = Vector3(x,y,z)
 		tf.transform.translation = referencePosition
@@ -186,6 +189,22 @@ class AssistiveTunnelController():
 		
 		# Overall assistance 
 		return K_default * self.k_max, p_min
+
+	def publish_updated_parameters(self, trans_mat, K_new, p_eqm_new):
+		# Equilibrium position
+		eqm_msg = transformation_matrix_to_PoseStamped(trans_mat, PARENT_FRAME)
+		eqm_msg.pose.position.x = p_eqm_new[px]
+		eqm_msg.pose.position.y = p_eqm_new[py]
+		eqm_msg.pose.position.z = p_eqm_new[pz]
+
+		self.equilibrium_position_publisher.publish(eqm_msg)
+		
+		# # Stiffness matrix
+		# impedance_msg = ImpedanceParams()
+		# translational_stiffness = DoubleParameter(name="translational_stiffness", value= list(K_new))
+        # rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=0)
+        # nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=0)
+  
 
 if __name__ == '__main__':
 	rospy.init_node('assistance_tunnel', anonymous=True, log_level=rospy.DEBUG)
