@@ -4,8 +4,9 @@ import sys
 import tf2_ros
 import tf2_geometry_msgs.tf2_geometry_msgs
 import message_filters
-from std_msgs.msg import String
+from std_msgs.msg import String, Int8
 from geometry_msgs.msg import PointStamped, PoseStamped, Point
+from time import sleep
 
 
 
@@ -14,10 +15,27 @@ class hand_tracker:
   def __init__(self):
     self.sub = rospy.Subscriber("/mrn_vision/openpose/body/wrist_right", PointStamped, self.wrist_callback)
     self.pub = rospy.Publisher("/equilibrium_pose", PoseStamped, queue_size=1)
+    self.mode = rospy.Subscriber("/cartesian_impedance_equilibrium_controller/mode", Int8, self.mode_callback)
     self.position_limits = [[-0.6, 0.6], [-0.6, 0.6], [0.05, 0.9]]
+    # self.position_limits = [[-1, 1], [-1, 1], [0.1, 1]]
     self.robot_pose = PoseStamped()
     self.tf_buffer = tf2_ros.Buffer()
     self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
+
+    # self.robot_pose.pose.position.x = 0.2061527818441391
+    # self.robot_pose.pose.position.y = 0.0015579211758449674
+    # self.robot_pose.pose.position.z = 0.36875462532043457
+    # self.robot_pose.pose.orientation.x = 0.997001051902771
+    # self.robot_pose.pose.orientation.y = -0.03093821555376053
+    # self.robot_pose.pose.orientation.z = -0.0690128430724144
+    # self.robot_pose.pose.orientation.w = -0.016413375735282898
+    # self.pub.publish(self.robot_pose)
+
+    self.is_running = 0
+
+    # sleep(10)
+
+
     
     # self.wrist_sub = message_filters.Subscriber("/mrn_vision/openpose/body/wrist_right", PointStamped)
     # self.elbow_sub = message_filters.Subscriber("/mrn_vision/openpose/body/elbow_right", PointStamped)
@@ -52,7 +70,7 @@ class hand_tracker:
   #   self.pub.publish(self.robot_pose)
 
   def wrist_callback(self, wrist):
-    self.transform = self.tf_buffer.lookup_transform("frame_color_097377233947", "panda_link0", rospy.Time.now())
+    # self.transform = self.tf_buffer.lookup_transform("frame_color_097377233947", "panda_link0", rospy.Time.now())
     self.vector = self.tf_buffer.transform(wrist, "panda_link0")
     
     self.robot_pose.pose.position.x = max([min([self.vector.point.x,
@@ -68,8 +86,14 @@ class hand_tracker:
     self.robot_pose.pose.orientation.y = 0
     self.robot_pose.pose.orientation.z = 0
     self.robot_pose.pose.orientation.w = 0
-    self.pub.publish(self.robot_pose)
 
+    print(self.is_running)
+    if (self.is_running == 1):
+      print(self.is_running)
+      self.pub.publish(self.robot_pose)
+
+  def mode_callback(self, msg):
+    self.is_running = msg.data
 
 
 def main(args):
