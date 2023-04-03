@@ -86,9 +86,11 @@ class AssistiveTunnelController():
 		traj_position = np.zeros((n, 3))
 		traj_position[:, 2] = z0
 
-		n_step = np.linspace(0, 0.1*np.pi, n)
-		traj_position[:, 0] = x0 + n_step
-		traj_position[:, 1] = 0.1*np.sin(10*n_step) + y0
+		# n_step = np.linspace(0, 0.1*np.pi, n)
+		# traj_position[:, 0] = x0 + n_step
+		# traj_position[:, 1] = 0.1*np.sin(10*n_step) + y0
+		traj_position[:, 0] = x0
+		traj_position[:, 1] = y0 + np.linspace(0, 0.5, n)
 
 		return traj_position
 
@@ -199,12 +201,17 @@ class AssistiveTunnelController():
 
 		self.equilibrium_position_publisher.publish(eqm_msg)
 		
-		# # Stiffness matrix
-		# impedance_msg = ImpedanceParams()
+		# Stiffness matrix
+		impedance_msg = ImpedanceParams()
+		translational_stiffness_labels = ["translational_stiffness_x", "translational_stiffness_y", "translational_stiffness_z"]
+		for label, value in zip(translational_stiffness_labels, K_new):
+			impedance_msg.data.append(DoubleParameter(name = label, value = value))
+
 		# translational_stiffness = DoubleParameter(name="translational_stiffness", value= list(K_new))
-        # rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=0)
-        # nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=0)
-  
+		impedance_msg.data.append(DoubleParameter(name="rotational_stiffness", value=0))
+		impedance_msg.data.append(DoubleParameter(name="nullspace_stiffness", value=0))
+		
+		self.stiffness_matrix_publisher.publish(impedance_msg)
 
 if __name__ == '__main__':
 	rospy.init_node('assistance_tunnel', anonymous=True, log_level=rospy.DEBUG)
