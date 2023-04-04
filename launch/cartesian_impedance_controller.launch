@@ -1,8 +1,8 @@
 <?xml version="1.0" ?>
 <launch>
-  <arg name="robot_ip" default="172.16.0.2"/>
+  <arg name="robot_ip" default="172.16.0.103"/>
   <arg name="load_gripper" default="true" />
-  <include file="$(find franka_control)/launch/franka_control.launch" >
+  <include file="$(find franka_control)/launch/franka_control_hazard.launch" >
     <arg name="robot_ip" value="$(arg robot_ip)" />
     <arg name="load_gripper" value="$(arg load_gripper)" />
   </include>
