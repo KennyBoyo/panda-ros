@@ -112,10 +112,10 @@ bool CartesianImpedanceEquilibriumController::init(hardware_interface::RobotHW* 
 
   cartesian_stiffness_.setZero();
   cartesian_damping_.setZero();
-  mode = 0;
+  mode = 1;
 
 
-  std::cout << "MODE 0" << mode << std::endl;
+  // std::cout << "MODE 0" << mode << std::endl;
   
   return true;
 }
@@ -247,10 +247,10 @@ void CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback(
     const panda_ros::ImpedanceParams& config) {
   
   
-  std::cout << "MODE " << mode << std::endl;
+  // std::cout << "MODE " << mode << std::endl;
 
   if (mode == 0) {
-    std::cout << "LOOP MODE 0" << std::endl;
+    // std::cout << "LOOP MODE 0" << std::endl;
     cartesian_stiffness_target_.setIdentity();
     cartesian_stiffness_target_.topLeftCorner(3, 3)
         << 0 * Eigen::Matrix3d::Identity();

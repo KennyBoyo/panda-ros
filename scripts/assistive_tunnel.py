@@ -131,10 +131,10 @@ class AssistiveTunnelController():
 		p_current = np.array([T_current[px], T_current[py], T_current[pz]])
 		min_idx, p_min, d_min = self.nearest_point_on_trajectory(p_current)
 
-		K, p_reference = self.get_tolerance_tunnel_model_update_paramaters(d_min, p_min, p_current)
+		K, p_reference = self.get_distance_model_update_parameters(d_min, p_min, p_current)
 		
 		# Publish updated parameters
-		## Equilibrium Posit
+		self.publish_updated_parameters(T_current, K, p_reference)
 
 		# Publish trajectory and nearest point for visualisation
 		self.pathMsg.header.stamp = rospy.Time.now()
@@ -145,7 +145,7 @@ class AssistiveTunnelController():
 
 		# pos is the current [x,y,z] position of the Franka EFF
 		delta = self.trajectory - pos
-		dist = np.einsum('ij,ij->i', delta, delta)
+		dist = np.sqrt(np.einsum('ij,ij->i', delta, delta))
 		
 		min_idx = np.argmin(dist)
 		d_min = dist[min_idx]
@@ -164,22 +164,25 @@ class AssistiveTunnelController():
 		br.sendTransform(tf)
 
 	def get_tolerance_tunnel_model_update_paramaters(self, d: np.double, p_min, p_current):
-		
+
 		# Equal stiffness of magnitude k is applied to the x, y and z axes.  
 		if d < self.tunnelRadius:
 			# Within inner constant force tunnel.
 			k = self.k_min
 			p_eqm = p_current
+			rospy.loginfo(f'{"Movement Free Zone": ^30} {d:.5f}m')
 
 		elif d < 2 * self.tunnelRadius:
 			# Inside fault tolerant region. Use fault tunnel stiffness.
 			k = self.f_fault_tolerance_stiffness(d)
 			p_eqm = p_min
+			rospy.loginfo(f"{'Fault Tolerance': ^30} {d:.5f}m")
 
 		else:
 			# In fault zone.
 			k = self.k_max
 			p_eqm = p_min 
+			rospy.logwarn(f"{'Fault Zone': ^30} {d:.5f}m")
 
 		# Stiffness matrix K, is 6x6
 		K_stiffness = K_default * k
@@ -195,9 +198,9 @@ class AssistiveTunnelController():
 	def publish_updated_parameters(self, trans_mat, K_new, p_eqm_new):
 		# Equilibrium position
 		eqm_msg = transformation_matrix_to_PoseStamped(trans_mat, PARENT_FRAME)
-		eqm_msg.pose.position.x = p_eqm_new[px]
-		eqm_msg.pose.position.y = p_eqm_new[py]
-		eqm_msg.pose.position.z = p_eqm_new[pz]
+		eqm_msg.pose.position.x = p_eqm_new[0]
+		eqm_msg.pose.position.y = p_eqm_new[1]
+		eqm_msg.pose.position.z = p_eqm_new[2]
 
 		self.equilibrium_position_publisher.publish(eqm_msg)
 		
@@ -215,7 +218,7 @@ class AssistiveTunnelController():
 
 if __name__ == '__main__':
 	rospy.init_node('assistance_tunnel', anonymous=True, log_level=rospy.DEBUG)
-	obc = AssistiveTunnelController(tunnelRadius=0.07, k_min=10, k_max = 150)
+	obc = AssistiveTunnelController(tunnelRadius=0.05, k_min=0, k_max = 200)
 	try:
 		rospy.spin()
 	except KeyboardInterrupt:
