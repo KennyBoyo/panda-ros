@@ -11,7 +11,7 @@ from dynamic_reconfigure.msg import Config, DoubleParameter, GroupState
 from std_msgs.msg import Int16MultiArray
 from franka_msgs.msg import FrankaState
 import tf.transformations as tr
-from panda_ros.msg import ImpedanceParams
+from panda_ros.msg import ImpedanceParams, StiffnessConfig
 
 def rotation_matrix_from_vectors(vec1, vec2):
     """ Find the rotation matrix that aligns vec1 to vec2
@@ -31,9 +31,11 @@ class equilibrium_publisher:
 
 	def __init__(self):
 		self.sub = rospy.Subscriber("/franka_state_controller/franka_states", FrankaState, self.equilibrium_adjuster_callback)
-		self.pub = rospy.Publisher("/cartesian_impedance_equilibrium_controller/equilibrium_pose", PoseStamped, queue_size=10)
-		self.stiffness = rospy.Publisher("/cartesian_impedance_equilibrium_controller/equilibrium_stiffness", ImpedanceParams, queue_size=10)
+		self.pub = rospy.Publisher("/cartesian_impedance_equilibrium_controller/equilibrium_pose", PoseStamped, queue_size=5)
+		self.stiffness = rospy.Publisher("/cartesian_impedance_equilibrium_controller/equilibrium_stiffness", ImpedanceParams, queue_size=5)
 		self.imp = rospy.Subscriber("/cartesian_impedance_equilibrium_controller/impedance_mode", Int8, self.impedance_mode_callback)
+
+		self.force_stiff = rospy.Publisher("/cartesian_impedance_equilibrium_controller/stiffness_config", StiffnessConfig, queue_size=5)
 
 
 		# self.stiffness = rospy.Publisher("/cartesian_impedance_equilibrium_controllerdynamic_reconfigure_compliance_param_node/parameter_updates", Config, queue_size=10)
@@ -59,8 +61,9 @@ class equilibrium_publisher:
 
 		self.wrench = WrenchStamped()
 		self.force_buffer_size = 10
-		self.force_buffer = [np.array([0, 0, 0])] * self.force_buffer_size
+		self.force_buffer = [np.array([0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float64)] * self.force_buffer_size
 		self.force_buffer_index = 0
+		self.summed_force = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float64)
 
 
 
@@ -101,6 +104,7 @@ class equilibrium_publisher:
 
 			# Publish Stiffnesses
 			self.set_k(actual=actual)
+			self.set_force_k(actual)
 
 			# Publish pose
 			self.pub.publish(self.robot_pose)
@@ -169,32 +173,60 @@ class equilibrium_publisher:
 
 	
 	def set_force_k(self, state):
+		# Get Force relative to Origin frame
+		wrench_o = state.O_F_ext_hat_K
+		f_vec = np.array([wrench_o[0], wrench_o[1], wrench_o[2]])
+		t_vec = np.array([wrench_o[3], wrench_o[4], wrench_o[5]])
+		
+		# Get Force and torque magnitude
+		f_mag = np.linalg.norm(f_vec*50)
+		t_mag = np.linalg.norm(t_vec*50)
+
+		# If force or wrench is exactly zero, we are approaching joint limit so don't do anything
+		if (f_mag == 0 or t_mag == 0):
+			return
+		
+		# Initialise StiffnessConfig message
+		stiffness_config = StiffnessConfig()
+		stiffness_config.headers.stamp = rospy.Time.now()
+
+		# Setup buffer
 		self.force_buffer_index += 1
 		if self.force_buffer_index == self.force_buffer_size:
 			self.force_buffer_index = 0
-		normal_scale = 1/10
-		stiffness_config = ImpedanceParams()
-		stiffness_config.headers.stamp = rospy.Time.now()
+		normal_scale = 1/5
 
-		wrench_o = state.O_F_ext_hat_K
-		force_vec = np.linalg.norm([wrench_o[0], wrench_o[1], wrench_o[2]])
-		torque_vec = np.linalg.norm([wrench_o[3], wrench_o[4], wrench_o[5]])
+		# Get rotated Stiffness ellipsoid in direction of force exertion 
+		f_mat = np.abs(self.get_rotated_ellipsoid(f_mag, f_vec, normal_scale).reshape(-1))
+		t_mat = np.abs(self.get_rotated_ellipsoid(t_mag, t_vec, normal_scale).reshape(-1))
+
+		# Buffer new value
+		self.force_buffer[self.force_buffer_index] = f_mat
+
+		# Transition out old bufferred force values
+		self.summed_force += f_mat
+		self.summed_force -= self.force_buffer[(self.force_buffer_index-(self.force_buffer_size-1)) % self.force_buffer_size]
+		# print(self.summed_force.reshape(3, 3))
+		# Fill out Message values
+		stiffness_config.force = self.summed_force / self.force_buffer_size
+		stiffness_config.torque = t_mat
+		stiffness_config.force_mag = f_mag
+		stiffness_config.torque_mag = t_mag
 		
-		force_mag = np.linalg.norm(force_vec)
-		torque_mag = np.linalg.norm(torque_mag)
+		self.force_stiff.publish(stiffness_config)
 
+	def get_rotated_ellipsoid(self, mag, dir_vec, normal_scale):
 		axis = np.array([1, 0, 0])
-		rotation = rotation_matrix_from_vectors(axis, force_vec)
+		rotation = rotation_matrix_from_vectors(axis, dir_vec)
 
 		k_mat = np.zeros((3,3))
-		k_mat[0][0] = force_mag
-		k_mat[1][1] = force_mag * normal_scale
-		k_mat[2][2] = force_mag * normal_scale
+		k_mat[0][0] = mag
+		k_mat[1][1] = mag * normal_scale
+		k_mat[2][2] = mag * normal_scale
+
 
 		k_mat = rotation @ k_mat
-		self.force_buffer[self.force_buffer_index] = self
-
-		
+		return k_mat
 
 	def impedance_mode_callback(self, msg):
 		rospy.loginfo(self.mode)
@@ -423,10 +455,7 @@ if __name__ == '__main__':
 #   joint_motion_generator_velocity_discontinuity: False
 #   joint_motion_generator_acceleration_discontinuity: False
 #   cartesian_position_motion_generator_start_pose_invalid: False
-#   cartesian_motion_generator_elbow_limit_violation: False
-#   cartesian_motion_generator_velocity_limits_violation: False
-#   cartesian_motion_generator_velocity_discontinuity: False
-#   cartesian_motion_generator_acceleration_discontinuity: False
+#   cartesian_motion_generator_elbow_limit_violation: False, type=np.float64
 #   cartesian_motion_generator_elbow_sign_inconsistent: False
 #   cartesian_motion_generator_start_elbow_invalid: False
 #   cartesian_motion_generator_joint_position_limits_violation: False
@@ -488,4 +517,4 @@ if __name__ == '__main__':
 #   cartesian_spline_motion_generator_violation: False
 #   joint_via_motion_generator_planning_joint_limit_violation: False
 #   base_acceleration_initialization_timeout: False
-#   base_acceleration_invalid_reading: False
+#   base_acceleration_invalid_reading: False, type=np.float64

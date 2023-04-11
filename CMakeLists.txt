@@ -26,6 +26,7 @@ find_package(Eigen3 REQUIRED)
 find_package(Franka 0.7.0 REQUIRED)
 
 add_message_files(FILES
+  StiffnessConfig.msg
   ForceOutput.msg
   ImpedanceParams.msg
   JointTorqueComparison.msg
