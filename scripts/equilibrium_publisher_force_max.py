@@ -85,27 +85,22 @@ class equilibrium_publisher:
 
 			# Convert robot end effector coordinates to quaternion
 			quat = tr.quaternion_from_matrix([[actual.O_T_EE[0], actual.O_T_EE[4], actual.O_T_EE[8], actual.O_T_EE[12]], \
-				[actual.O_T_EE[1], actual.O_T_EE[5], actual.O_T_EE[9], actual.O_T_EE[13]], \
-					[actual.O_T_EE[2], actual.O_T_EE[6], actual.O_T_EE[10], actual.O_T_EE[14]], \
-						[actual.O_T_EE[3], actual.O_T_EE[7], actual.O_T_EE[11], actual.O_T_EE[15]]])
-			# # print(actual.dtheta)
-			# print([[actual.O_T_EE[0], actual.O_T_EE[4], actual.O_T_EE[8], actual.O_T_EE[12]], \
-			# 	[actual.O_T_EE[1], actual.O_T_EE[5], actual.O_T_EE[9], actual.O_T_EE[13]], \
-			# 		[actual.O_T_EE[2], actual.O_T_EE[6], actual.O_T_EE[10], actual.O_T_EE[14]], \
-			# 			[actual.O_T_EE[3], actual.O_T_EE[7], actual.O_T_EE[11], actual.O_T_EE[15]]])
-
+											[actual.O_T_EE[1], actual.O_T_EE[5], actual.O_T_EE[9], actual.O_T_EE[13]], \
+											[actual.O_T_EE[2], actual.O_T_EE[6], actual.O_T_EE[10], actual.O_T_EE[14]], \
+											[actual.O_T_EE[3], actual.O_T_EE[7], actual.O_T_EE[11], actual.O_T_EE[15]]])
+			
 			# Set end effector robot position
 			self.robot_pose.pose.position.x = max([min([actual.O_T_EE[12],
-																						self.position_limits[0][1]]),
-																						self.position_limits[0][0]])
+												self.position_limits[0][1]]),
+												self.position_limits[0][0]])
 
 			self.robot_pose.pose.position.y = max([min([actual.O_T_EE[13],
-																				self.position_limits[1][1]]),
-																				self.position_limits[1][0]])
+												self.position_limits[1][1]]),
+												self.position_limits[1][0]])
 
 			self.robot_pose.pose.position.z = max([min([actual.O_T_EE[14],
-																				self.position_limits[2][1]]),
-																				self.position_limits[2][0]])
+												self.position_limits[2][1]]),
+												self.position_limits[2][0]])
 
 			# Set end effector orientation
 			self.robot_pose.pose.orientation.x = quat[0]
@@ -113,77 +108,11 @@ class equilibrium_publisher:
 			self.robot_pose.pose.orientation.z = quat[2]
 			self.robot_pose.pose.orientation.w = quat[3]
 
+			# Publish pose
 			self.pub.publish(self.robot_pose)
-			# print(self.robot_pose.pose.orientation)
 
 			# Publish Stiffnesses
-			# self.set_k(actual=actual)
 			self.set_force_k(actual)
-
-			# Publish pose
-
-
-	def set_k(self, actual):
-		stiffness_config = ImpedanceParams()
-		stiffness_config.headers.stamp = rospy.Time.now()
-		index_delay = 1
-		magnitude = (20*((actual.O_T_EE[12] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[12])**2 + (actual.O_T_EE[13] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[13])**2 + (actual.O_T_EE[14] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[14])**2)**0.5)
-		magnitudes = ((30*((actual.O_T_EE[12] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[12])**2)**0.5), (30*((actual.O_T_EE[13] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[13])**2)**0.5), (30*((actual.O_T_EE[14] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[14])**2)**0.5))
-
-		#SIGMOID
-		for i in range(len(magnitudes)):
-			if (magnitudes[i] < self.mag_thres_dec):
-				self.k_t[i] -= 1
-			elif (magnitudes[i] > self.mag_thres_inc):
-				self.k_t[i] += magnitudes[i]
-
-			if (self.k_t[i] < 0):
-					self.k_t[i] = 0
-
-		if (magnitude < self.mag_thres_dec):
-				self.k -= 1
-		elif (magnitude > self.mag_thres_inc):
-			self.k += magnitude
-
-		if (self.k < 0):
-				self.k = 0
-
-		translation_stiffness_labels = ["translational_stiffness_x", "translational_stiffness_y", "translational_stiffness_z"]
-
-		if (self.mode == 0):
-				stiffness_config.data.append(DoubleParameter(name="translational_stiffness", value=0))
-				rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=0)
-				nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=0)
-
-		else:
-			for i in range(len(magnitudes)):
-				if (self.k_t[i] < self.translation_lower_limit):
-					stiffness_config.data.append(DoubleParameter(name=translation_stiffness_labels[i], value=0))
-				elif (self.k_t[i] > self.translation_upper_limit):
-					self.k_t[i] = self.translation_upper_limit
-					stiffness_config.data.append(DoubleParameter(name=translation_stiffness_labels[i], value=self.translation_upper_limit))
-				else:
-					stiffness_config.data.append(DoubleParameter(name=translation_stiffness_labels[i], value=self.k_t[i]))
-
-
-			if (self.k < self.translation_lower_limit):
-				rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=0)
-				nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=0)
-			elif (self.k > self.translation_upper_limit):
-				self.k = self.translation_upper_limit
-				rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=self.translation_upper_limit/3)
-				nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=self.k/2)
-			else:
-				rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=self.k/3)
-				nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=self.k/2)
-
-		stiffness_config.data.append(rotational_stiffness)
-		stiffness_config.data.append(nullspace_stiffness)
-
-		stiffness_config.data.append(DoubleParameter(name="mode", value=self.mode))
-
-		self.stiffness.publish(stiffness_config)
-
 	
 	def set_force_k(self, state):
 		# Get Force relative to Origin frame
