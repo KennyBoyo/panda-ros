@@ -298,9 +298,10 @@ void CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback(
 
     
     cartesian_damping_target_.topLeftCorner(3, 3)
-        << damping_tl;
+        << 10 * Eigen::Matrix3d::Identity();
+        // << damping_tl;
     cartesian_damping_target_.bottomRightCorner(3, 3)
-        << 30 * Eigen::Matrix3d::Identity();
+        << 10 * Eigen::Matrix3d::Identity();
     // nullspace_stiffness_target_ = config.data[4].value/5;
     std::cout << "cartesian_damping_target_" << std::endl;
     std::cout << cartesian_damping_target_ << std::endl;

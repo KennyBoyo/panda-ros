@@ -44,11 +44,12 @@ class equilibrium_publisher:
 
 
 		# self.stiffness = rospy.Publisher("/cartesian_impedance_equilibrium_controllerdynamic_reconfigure_compliance_param_node/parameter_updates", Config, queue_size=10)
-		self.position_limits = [[-0.6, 0.6], [-0.6, 0.6], [0.05, 0.9]]
+		# self.position_limits = [[-0.6, 0.6], [-0.6, 0.6], [0.05, 0.9]]
 		self.robot_pose_eq = PoseStamped()
 		self.robot_pose = PoseStamped()
-		self.index = 0
-		self.buffer_size = 20
+		self.pose_index = 0
+		self.pose_index_delay = 19
+		self.pose_buffer_size = 20
 		self.k = 0
 		self.k_t = [0] * 3
 
@@ -58,61 +59,75 @@ class equilibrium_publisher:
 
 		self.translation_lower_limit = 0
 		self.translation_upper_limit = 150
-		self.robot_pose_list = [None] * self.buffer_size
+		self.robot_pose_list = [None] * self.pose_buffer_size
 
 		self.robot_pose.header.frame_id = "panda_link0"
 
 		self.mode = 0
 
-		self.wrench = WrenchStamped()
 		self.force_buffer_size = 10
 		self.force_buffer = [np.array([0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float64)] * self.force_buffer_size
 		self.force_buffer_index = 0
 		self.summed_force = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float64)
 
 
+		self.max = np.array([200, 0, 0, 0, 200, 0, 0, 0, 200], dtype=np.float64)
+		self.current_stiffness = deepcopy(self.max)
+		self.v_thres_low = 2
+		self.v_thres_high = 2.5
+		self.f_thres_low = 5
+		self.adjustment_queue = []
 
-	def equilibrium_adjuster_callback(self, actual: FrankaState):
 
-		self.generate_marker(actual)
-		self.robot_pose_list[self.index] = actual
-		self.index += 1
-		if (self.index == self.buffer_size):
-			self.index = 0
-		if self.robot_pose_list[self.index] != None:
-			actual = self.robot_pose_list[self.index]
+	def equilibrium_adjuster_callback(self, state: FrankaState):
+
+		self.robot_pose_list[self.pose_index] = state
+		self.pose_index += 1
+		if (self.pose_index == self.pose_buffer_size):
+			self.pose_index = 0
+		if self.robot_pose_list[self.pose_index] != None:
+
+			equilibrium_pose = self.robot_pose_list[(self.pose_index - self.pose_index_delay) % 20]
 			self.robot_pose.header.stamp = rospy.Time.now()
 
 			# Convert robot end effector coordinates to quaternion
-			quat = tr.quaternion_from_matrix([[actual.O_T_EE[0], actual.O_T_EE[4], actual.O_T_EE[8], actual.O_T_EE[12]], \
-											[actual.O_T_EE[1], actual.O_T_EE[5], actual.O_T_EE[9], actual.O_T_EE[13]], \
-											[actual.O_T_EE[2], actual.O_T_EE[6], actual.O_T_EE[10], actual.O_T_EE[14]], \
-											[actual.O_T_EE[3], actual.O_T_EE[7], actual.O_T_EE[11], actual.O_T_EE[15]]])
+			quat = tr.quaternion_from_matrix([[equilibrium_pose.O_T_EE[0], equilibrium_pose.O_T_EE[4], equilibrium_pose.O_T_EE[8], equilibrium_pose.O_T_EE[12]], \
+											[equilibrium_pose.O_T_EE[1], equilibrium_pose.O_T_EE[5], equilibrium_pose.O_T_EE[9], equilibrium_pose.O_T_EE[13]], \
+											[equilibrium_pose.O_T_EE[2], equilibrium_pose.O_T_EE[6], equilibrium_pose.O_T_EE[10], equilibrium_pose.O_T_EE[14]], \
+											[equilibrium_pose.O_T_EE[3], equilibrium_pose.O_T_EE[7], equilibrium_pose.O_T_EE[11], equilibrium_pose.O_T_EE[15]]])
 			
 			# Set end effector robot position
-			self.robot_pose.pose.position.x = max([min([actual.O_T_EE[12],
-												self.position_limits[0][1]]),
-												self.position_limits[0][0]])
+			# self.robot_pose.pose.position.x = max([min([state.O_T_EE[12],
+			# 									self.position_limits[0][1]]),
+			# 									self.position_limits[0][0]])
 
-			self.robot_pose.pose.position.y = max([min([actual.O_T_EE[13],
-												self.position_limits[1][1]]),
-												self.position_limits[1][0]])
+			# self.robot_pose.pose.position.y = max([min([state.O_T_EE[13],
+			# 									self.position_limits[1][1]]),
+			# 									self.position_limits[1][0]])
 
-			self.robot_pose.pose.position.z = max([min([actual.O_T_EE[14],
-												self.position_limits[2][1]]),
-												self.position_limits[2][0]])
+			# self.robot_pose.pose.position.z = max([min([state.O_T_EE[14],
+			# 									self.position_limits[2][1]]),
+			# 									self.position_limits[2][0]])
+
+			self.robot_pose.pose.position.x = equilibrium_pose.O_T_EE[12]
+
+			self.robot_pose.pose.position.y = equilibrium_pose.O_T_EE[13]
+
+			self.robot_pose.pose.position.z = equilibrium_pose.O_T_EE[14]
 
 			# Set end effector orientation
 			self.robot_pose.pose.orientation.x = quat[0]
 			self.robot_pose.pose.orientation.y = quat[1]
 			self.robot_pose.pose.orientation.z = quat[2]
 			self.robot_pose.pose.orientation.w = quat[3]
+			self.generate_marker(state)
 
 			# Publish pose
 			self.pub.publish(self.robot_pose)
 
 			# Publish Stiffnesses
-			self.set_force_k(actual)
+			# self.set_force_k(state)
+			self.adjust_stiffness(state)
 	
 	def set_force_k(self, state):
 		# Get Force relative to Origin frame
@@ -139,8 +154,8 @@ class equilibrium_publisher:
 		normal_scale = 1/5
 
 		# Get rotated Stiffness ellipsoid in direction of force exertion 
-		f_mat = np.abs(self.get_rotated_ellipsoid(f_mag, f_vec, normal_scale).reshape(-1))
-		t_mat = np.abs(self.get_rotated_ellipsoid(t_mag, t_vec, normal_scale).reshape(-1))
+		f_mat = np.abs(self.get_rotated_ellipsoid(f_vec, f_mag, normal_scale).reshape(-1))
+		t_mat = np.abs(self.get_rotated_ellipsoid(t_vec, t_mag, normal_scale).reshape(-1))
 
 		# Buffer new value
 		self.force_buffer[self.force_buffer_index] = f_mat
@@ -157,7 +172,7 @@ class equilibrium_publisher:
 
 		self.force_stiff.publish(stiffness_config)
 
-	def get_rotated_ellipsoid(self, mag, dir_vec, normal_scale):
+	def get_rotated_ellipsoid(self, dir_vec, mag = 1, normal_scale = 0.1):
 		axis = np.array([1, 0, 0])
 		rotation = rotation_matrix_from_vectors(axis, dir_vec)
 
@@ -191,8 +206,8 @@ class equilibrium_publisher:
 			return
 		
 		# Get rotated Stiffness ellipsoid in direction of force exertion 
-		f_mat = np.abs(self.get_rotated_ellipsoid(f_mag, f_vec, 1))
-		t_mat = np.abs(self.get_rotated_ellipsoid(t_mag, t_vec, 1))
+		f_mat = np.abs(self.get_rotated_ellipsoid(f_vec, f_mag, 1))
+		t_mat = np.abs(self.get_rotated_ellipsoid(t_vec, t_mag, 1))
 		f_mat = rotation_matrix_from_vectors(np.array([1, 0, 0]), f_vec)
 		t_mat = rotation_matrix_from_vectors(np.array([1, 0, 0]), t_vec)
 
@@ -225,6 +240,63 @@ class equilibrium_publisher:
 		
 		wrench_markers.markers.append(force_marker)
 		self.pub_visualiser.publish(wrench_markers)
+
+	def adjust_stiffness(self, state, verbose=False):
+		# Initialise StiffnessConfig message
+		stiffness_config = StiffnessConfig()
+		stiffness_config.headers.stamp = rospy.Time.now()
+
+		# Get Force relative to Origin frame
+		wrench_o = state.O_F_ext_hat_K
+		f_vec = np.array([wrench_o[0], wrench_o[1], wrench_o[2]])
+		t_vec = np.array([wrench_o[3], wrench_o[4], wrench_o[5]])
+
+		# Calculate force vector
+		f_mag = np.linalg.norm(f_vec)
+		f_dir = f_vec / f_mag
+
+		# v = d / dt
+		index_delay = 1
+		dist = np.linalg.norm([self.robot_pose.pose.position.x - self.robot_pose_list[(self.pose_index - index_delay) % self.pose_buffer_size].O_T_EE[12],\
+							self.robot_pose.pose.position.y - self.robot_pose_list[(self.pose_index - index_delay) % self.pose_buffer_size].O_T_EE[13],\
+							self.robot_pose.pose.position.z - self.robot_pose_list[(self.pose_index - index_delay) % self.pose_buffer_size].O_T_EE[14]])
+		vel = dist*30/index_delay
+		if (verbose):
+			print("Force = ", f_mag)
+			print("Velocity = ", vel)
+			print("Distance = ", dist)
+		
+		f_mat = self.get_rotated_ellipsoid(f_dir).reshape(-1)
+
+		# Adjustment matrix is a unit step in the direction of force
+		adjustment_matrix = f_mat/np.linalg.norm(f_mat)
+
+		if (vel < self.v_thres_low):
+			if (f_mag > self.f_thres_low):
+				self.adjustment_queue.append(adjustment_matrix)
+				self.current_stiffness -= np.array(adjustment_matrix, dtype=np.float64)
+			else:
+				if (self.adjustment_queue.__len__() > 0):
+					self.current_stiffness += np.array(self.adjustment_queue.pop(), dtype=np.float64)
+
+
+		elif (vel > self.v_thres_high):
+			if (self.adjustment_queue.__len__() > 0):
+				self.current_stiffness += np.array(self.adjustment_queue.pop(), dtype=np.float64)
+
+		# Fill out Message values
+		stiffness_config.force = self.current_stiffness
+		# stiffness_config.torque = t_mat
+		stiffness_config.force_mag = f_mag
+		# stiffness_config.torque_mag = t_mag
+
+		if (verbose):
+			print(self.current_stiffness)
+
+		self.force_stiff.publish(stiffness_config)
+
+		
+
 
 		
 def main(args):
