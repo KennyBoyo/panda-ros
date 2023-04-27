@@ -11,6 +11,7 @@ import tf.transformations as tr
 from copy import deepcopy
 import numpy as np
 import tf2_ros
+import scipy.interpolate as scipolate
 
 PARENT_FRAME = "panda_link0"
 # X, Y and Z elements in Float64 Tmatrix (FrankaState)
@@ -67,6 +68,38 @@ def transformation_matrix_to_TransformStamped(trans_mat, frame_id: str, child_id
 
 	return msg
 
+def trajectory_generator(p0, n):
+	traj_position = np.zeros((n, 3))
+	traj_position[:, 2] = p0[2]
+
+	# n_step = np.linspace(0, 0.1*np.pi, n)
+	# traj_position[:, 0] = x0 + n_step
+	# traj_position[:, 1] = 0.1*np.sin(10*n_step) + y0
+	traj_position[:, 0] = p0[0]
+	traj_position[:, 1] = p0[1] + np.linspace(0, 0.5, n)
+
+	return traj_position
+
+def spline_trajectory_generator(p0, degree, n):
+	cv = [[0,0,0],
+       		[0.1, 0.1, 0.1],
+			[0.2, 0.2, 0.4],
+			[0.5, -0.2, 0.2],
+			[0.7, 0.2, -0.1]]
+	cv = np.asarray(cv)
+	cv += p0
+	count = cv.shape[0]
+
+	degree = np.clip(degree, 1, count - 1)
+	kv = np.clip(np.arange(count + degree + 1) - degree, 0, count - degree)
+
+	# Return samples
+	max_param = count - degree
+	spl = scipolate.BSpline(kv, cv, degree)
+
+	spline_trajectory = spl(np.linspace(0,max_param,n))
+	
+	return spline_trajectory
 class AssistiveTunnelController():
 	def __init__(self, tunnelRadius: np.double, k_min, k_max):
 		self.tunnelRadius = tunnelRadius
@@ -82,17 +115,6 @@ class AssistiveTunnelController():
 		self.k_max = k_max
 		self.f_fault_tolerance_stiffness = lambda d : k_min + ((k_max - k_min)/tunnelRadius)*(d-tunnelRadius)
 
-	def trajectory_generator(self, x0, y0, z0, n):
-		traj_position = np.zeros((n, 3))
-		traj_position[:, 2] = z0
-
-		# n_step = np.linspace(0, 0.1*np.pi, n)
-		# traj_position[:, 0] = x0 + n_step
-		# traj_position[:, 1] = 0.1*np.sin(10*n_step) + y0
-		traj_position[:, 0] = x0
-		traj_position[:, 1] = y0 + np.linspace(0, 0.5, n)
-
-		return traj_position
 
 	def initialise_trajectory(self, t0: list):
 
@@ -102,10 +124,9 @@ class AssistiveTunnelController():
 			originalPose = transformation_matrix_to_PoseStamped(trans_mat, PARENT_FRAME)
 
 			# Initialise Trajectory
-			self.trajectory = self.trajectory_generator(x0 = trans_mat[px],\
-														y0 = trans_mat[py],\
-														z0 = trans_mat[pz],\
-														n = 30)
+			p0 = np.asarray([trans_mat[px], trans_mat[py], trans_mat[pz]])
+			# self.trajectory = trajectory_generator(p0 ,n = 30)
+			self.trajectory = spline_trajectory_generator(p0, 5, 50)
 			# Create nav_msgs Path
 			self.pathMsg = Path()
 			self.pathMsg.header.stamp = rospy.Time.now()
@@ -118,6 +139,8 @@ class AssistiveTunnelController():
 				new_pose.pose.position.z = coord[2]
 				new_pose.header.stamp = rospy.Time.now()
 				self.pathMsg.poses.append(new_pose)
+
+			self.pn_idx = 0
 	
 	def step(self, msg: FrankaState):
 
@@ -129,7 +152,7 @@ class AssistiveTunnelController():
 			self.initialisedTrajectory = True
 
 		p_current = np.array([T_current[px], T_current[py], T_current[pz]])
-		min_idx, p_min, d_min = self.nearest_point_on_trajectory(p_current)
+		min_idx, p_min, d_min = self.nearest_point_on_trajectory(p_current, 5)
 
 		K, p_reference = self.get_distance_model_update_parameters(d_min, p_min, p_current)
 		
@@ -141,15 +164,21 @@ class AssistiveTunnelController():
 		self.trajectory_publisher.publish(self.pathMsg)
 		self.visualise_nearest_trajectory_point(p_reference, T_current)
 
-	def nearest_point_on_trajectory(self, pos: np.array):
-
+	def nearest_point_on_trajectory(self, pos: np.array, vicinity_idx: int):
+		prev_idx = self.pn_idx 
+		
 		# pos is the current [x,y,z] position of the Franka EFF
-		delta = self.trajectory - pos
+		idx_l = (prev_idx - vicinity_idx) if (prev_idx - vicinity_idx) > 0 else 0 
+		traj_in_vicinity = self.trajectory[idx_l: prev_idx + vicinity_idx]
+		delta = traj_in_vicinity - pos
 		dist = np.sqrt(np.einsum('ij,ij->i', delta, delta))
 		
-		min_idx = np.argmin(dist)
-		d_min = dist[min_idx]
-		p_min = self.trajectory[min_idx]
+		min_idx_vicinity = np.argmin(dist)
+		d_min = dist[min_idx_vicinity]
+		p_min = traj_in_vicinity[min_idx_vicinity]
+
+		min_idx = idx_l + min_idx_vicinity
+		self.pn_idx = min_idx
 		return min_idx, p_min, d_min
 
 	def visualise_nearest_trajectory_point(self, p_ref, trans_mat):
