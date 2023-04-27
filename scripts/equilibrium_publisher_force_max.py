@@ -71,11 +71,11 @@ class equilibrium_publisher:
 		self.summed_force = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float64)
 
 
-		self.max = np.array([200, 0, 0, 0, 200, 0, 0, 0, 200], dtype=np.float64)
+		self.max = np.array([300, 100, 100, 100, 300, 100, 100, 100, 300], dtype=np.float64)
 		self.current_stiffness = deepcopy(self.max)
 		self.v_thres_low = 2
 		self.v_thres_high = 2.5
-		self.f_thres_low = 5
+		self.f_thres_low = 4
 		self.adjustment_queue = []
 
 
@@ -269,20 +269,25 @@ class equilibrium_publisher:
 		f_mat = self.get_rotated_ellipsoid(f_dir).reshape(-1)
 
 		# Adjustment matrix is a unit step in the direction of force
-		adjustment_matrix = f_mat/np.linalg.norm(f_mat)
+		adjustment_matrix = np.array(f_mat/np.linalg.norm(f_mat), dtype = np.float64)
 
 		if (vel < self.v_thres_low):
 			if (f_mag > self.f_thres_low):
+				temp_stiff = self.current_stiffness - adjustment_matrix
+				for i in range(len(temp_stiff)):
+					if temp_stiff[i] < 0:
+						adjustment_matrix[i] += temp_stiff[i]
+				
 				self.adjustment_queue.append(adjustment_matrix)
-				self.current_stiffness -= np.array(adjustment_matrix, dtype=np.float64)
+				self.current_stiffness -= adjustment_matrix
 			else:
 				if (self.adjustment_queue.__len__() > 0):
-					self.current_stiffness += np.array(self.adjustment_queue.pop(), dtype=np.float64)
+					self.current_stiffness += self.adjustment_queue.pop()
 
 
 		elif (vel > self.v_thres_high):
 			if (self.adjustment_queue.__len__() > 0):
-				self.current_stiffness += np.array(self.adjustment_queue.pop(), dtype=np.float64)
+				self.current_stiffness += self.adjustment_queue.pop()
 
 		# Fill out Message values
 		stiffness_config.force = self.current_stiffness
