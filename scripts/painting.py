@@ -20,6 +20,7 @@ class paint_publisher:
 	def __init__(self):
 		self.sub = rospy.Subscriber("/franka_state_controller/franka_states", FrankaState, self.paint)
 		self.pub = rospy.Publisher("/cartesian_impedance_equilibrium_controller/painting", Marker, queue_size=5)
+		self.workspace_pub = rospy.Publisher("/cartesian_impedance_equilibrium_controller/robot_workspace_approx", Marker, queue_size=5)
 
 		self.robot_pose_eq = PoseStamped()
 		self.robot_pose = PoseStamped()
@@ -32,8 +33,9 @@ class paint_publisher:
 		self.pos_marker = Marker()
 
 		# Resolution of cube (10^(-cube_res))
-		self.cube_res_places = 1
-		self.cube_res = 10**(-self.cube_res_places)
+		self.cube_res_places = 2
+		self.cube_res_factor = 5
+		self.cube_res = self.cube_res_factor * 10**(-self.cube_res_places)
 
 		# Side width of cube workspace (meters) (min is 2x max reach of robot)
 		self.cube_len = 2
@@ -43,16 +45,15 @@ class paint_publisher:
 		self.idx = 0
 
 
+
 	def paint(self, state: FrankaState):
 		self.init_marker()
+		self.generate_workspace_marker()
 		self.generate_marker(state)
 
 	def init_marker(self):
-		# force_quat = tr.quaternion_from_matrix(T_force)
 		self.pos_marker.id = self.idx
-		# self.idx += 1
 		self.pos_marker.header.frame_id = self.robot_pose.header.frame_id
-		# force_quat /= np.linalg.norm(force_quat)
 		self.pos_marker.pose.orientation.x = 0
 		self.pos_marker.pose.orientation.y = 0
 		self.pos_marker.pose.orientation.z = 0
@@ -61,15 +62,43 @@ class paint_publisher:
 		self.pos_marker.color.r = 1.0
 		self.pos_marker.color.g = 0.0
 		self.pos_marker.color.b = 0.0
-
 		self.pos_marker.type = Marker.CUBE_LIST
 		self.pos_marker.header.stamp = rospy.Time.now()
 		self.pos_marker.scale.x = self.cube_res
 		self.pos_marker.scale.y = self.cube_res
 		self.pos_marker.scale.z = self.cube_res
 
+	def generate_workspace_marker(self):
+		self.workspace_marker = Marker()
+		self.workspace_marker.id = self.idx
+		# self.idx += 1
+		self.workspace_marker.header.frame_id = self.robot_pose.header.frame_id
+		self.workspace_marker.pose.position.x = 0
+		self.workspace_marker.pose.position.y = 0
+		self.workspace_marker.pose.position.z = 0
+
+		self.workspace_marker.pose.orientation.x = 0
+		self.workspace_marker.pose.orientation.y = 0
+		self.workspace_marker.pose.orientation.z = 0
+		self.workspace_marker.pose.orientation.w = 1
+		self.workspace_marker.color.a = 0.01
+		self.workspace_marker.color.r = 1.0
+		self.workspace_marker.color.g = 1.0
+		self.workspace_marker.color.b = 1.0
+		self.workspace_marker.type = Marker.SPHERE
+		self.workspace_marker.header.stamp = rospy.Time.now()
+		self.workspace_marker.scale.x = 1
+		self.workspace_marker.scale.y = 1
+		self.workspace_marker.scale.z = 1
+		
+		self.workspace_pub.publish(self.workspace_marker)
+
+
+
+
 	def generate_marker(self, state):
 		x, y, z = self.snap_grid(state.O_T_EE[12], state.O_T_EE[13], state.O_T_EE[14])
+		# print(x, y, z)
 
 		taken = self.check_point(x, y, z)
 		if not taken:
@@ -90,7 +119,7 @@ class paint_publisher:
 		self.pos_marker.points.append(point)
 		self.pos_marker.colors.append(colour)
 
-		print(self.pos_marker)
+		# print(self.pos_marker)
 
 		# self.pos_markers.markers.append(pos_marker)
 		self.pub.publish(self.pos_marker)
@@ -100,14 +129,17 @@ class paint_publisher:
 		cube_grid_index_offset = self.cube_len/2
 		x, y, z = int((cube_grid_index_offset + x)/self.cube_res), int((cube_grid_index_offset + y)/self.cube_res), int((cube_grid_index_offset + z)/self.cube_res)
 		
-		if not self.cube_grid[x,y,z]:
+		if not self.cube_grid[x-1,y-1,z-1]:
 			self.cube_grid[x,y,z] = 1
 			return True
 		return False
 
 
 	def snap_grid(self, x, y, z):
-		return np.around(x, self.cube_res_places), np.around(y, self.cube_res_places), np.around(z, self.cube_res_places)
+
+		if self.cube_res_factor > 1:
+			return np.around(x*(10/self.cube_res_factor), self.cube_res_places-1)/(10/self.cube_res_factor), np.around(y*(10/self.cube_res_factor), self.cube_res_places-1)/(10/self.cube_res_factor), np.around(z*(10/self.cube_res_factor), self.cube_res_places-1)/(10/self.cube_res_factor)
+		return np.around(x*(10/self.cube_res_factor), self.cube_res_places)/(10/self.cube_res_factor), np.around(y*(10/self.cube_res_factor), self.cube_res_places)/(10/self.cube_res_factor), np.around(z*(10/self.cube_res_factor), self.cube_res_places)/(10/self.cube_res_factor)
 		
 def main(args):
 	rospy.init_node('paint_publisher', anonymous=True, log_level=rospy.DEBUG)

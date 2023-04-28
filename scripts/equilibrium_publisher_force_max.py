@@ -269,7 +269,7 @@ class equilibrium_publisher:
 		f_mat = self.get_rotated_ellipsoid(f_dir).reshape(-1)
 
 		# Adjustment matrix is a unit step in the direction of force
-		adjustment_matrix = np.array(f_mat/np.linalg.norm(f_mat), dtype = np.float64)
+		adjustment_matrix = 2*np.array(f_mat/np.linalg.norm(f_mat), dtype = np.float64)
 
 		if (vel < self.v_thres_low):
 			if (f_mag > self.f_thres_low):
