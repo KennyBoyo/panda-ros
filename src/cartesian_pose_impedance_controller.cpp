@@ -22,6 +22,7 @@ bool CartesianPoseImpedanceController::init(hardware_interface::RobotHW* robot_h
   std::vector<double> cartesian_stiffness_vector;
   std::vector<double> cartesian_damping_vector;
 
+  // Define Subscribers and Publishers
   sub_equilibrium_pose_ = node_handle.subscribe(
       "equilibrium_pose", 20, &CartesianPoseImpedanceController::equilibriumPoseCallback, this,
       ros::TransportHints().reliable().tcpNoDelay());
@@ -34,13 +35,9 @@ bool CartesianPoseImpedanceController::init(hardware_interface::RobotHW* robot_h
       "impedance_mode", 20, &CartesianPoseImpedanceController::impedanceModeCallback, this,
       ros::TransportHints().reliable().tcpNoDelay());
 
-  // sub_equilibrium_stiffness_ = node_handle.publish(
-  //     "abc", 20, &sts_msgs::In, this,
-  //     ros::TransportHints().reliable().tcpNoDelay());
+  // Get Panda Hardware Parameters and control
 
-
-  
-
+  // Cartesian Impedance Interface
   std::string arm_id;
   if (!node_handle.getParam("arm_id", arm_id)) {
     ROS_ERROR_STREAM("CartesianPoseImpedanceController: Could not read parameter arm_id");
@@ -79,6 +76,24 @@ bool CartesianPoseImpedanceController::init(hardware_interface::RobotHW* robot_h
   try {
     state_handle_ = std::make_unique<franka_hw::FrankaStateHandle>(
         state_interface->getHandle(arm_id + "_robot"));
+    
+    std::array<double, 7> q_start{{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
+    for (size_t i = 0; i < q_start.size(); i++) {
+      if (std::abs(state_handle.getRobotState().q_d[i] - q_start[i]) > 0.1) {
+        ROS_ERROR_STREAM(
+            "CartesianPoseExampleController: Robot is not in the expected starting position for "
+            "running this example. Run `roslaunch franka_example_controllers move_to_start.launch "
+            "robot_ip:=<robot-ip> load_gripper:=<has-attached-gripper>` first.");
+        return false;
+      }
+    }
+
+    // // OR DO THIS INSTEAD TO STOP ERRORING?
+    // std::array<double, 7> q_start{{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
+    // for (size_t i = 0; i < q_start.size(); i++) {
+    //   q_start[i] = q_d[i];
+    // }
+
   } catch (hardware_interface::HardwareInterfaceException& ex) {
     ROS_ERROR_STREAM(
         "CartesianPoseImpedanceController: Exception getting state handle from interface: "
@@ -102,15 +117,22 @@ bool CartesianPoseImpedanceController::init(hardware_interface::RobotHW* robot_h
     }
   }
 
-  // dynamic_reconfigure_compliance_param_node_ =
-  //     ros::NodeHandle(node_handle.getNamespace() + "_dynamic_reconfigure_compliance_param_node");
-
-  // dynamic_server_compliance_param_ = std::make_unique<
-  //     dynamic_reconfigure::Server<franka_example_controllers::compliance_paramConfig>>(
-
-  //     dynamic_reconfigure_compliance_param_node_);
-  // dynamic_server_compliance_param_->setCallback(
-  //     boost::bind(&CartesianPoseImpedanceController::complianceParamCallback, this, _1, _2));
+  // Cartesian Pose Interface
+  cartesian_pose_interface_ = robot_hardware->get<franka_hw::FrankaPoseCartesianInterface>();
+  if (cartesian_pose_interface_ == nullptr) {
+    ROS_ERROR(
+        "CartesianPoseExampleController: Could not get Cartesian Pose "
+        "interface from hardware");
+    return false;
+  }
+  try {
+    cartesian_pose_handle_ = std::make_unique<franka_hw::FrankaCartesianPoseHandle>(
+        cartesian_pose_interface_->getHandle(arm_id + "_robot"));
+  } catch (const hardware_interface::HardwareInterfaceException& e) {
+    ROS_ERROR_STREAM(
+        "CartesianPoseExampleController: Exception getting Cartesian handle: " << e.what());
+    return false;
+  }
 
   position_d_.setZero();
   orientation_d_.coeffs() << 0.0, 0.0, 0.0, 1.0;
@@ -121,9 +143,6 @@ bool CartesianPoseImpedanceController::init(hardware_interface::RobotHW* robot_h
   cartesian_damping_.setZero();
   mode = 0;
 
-
-  std::cout << "MODE 0" << mode << std::endl;
-  
   return true;
 }
 
@@ -134,10 +153,7 @@ void CartesianPoseImpedanceController::starting(const ros::Time& /*time*/) {
   // get jacobian
   std::array<double, 42> jacobian_array =
       model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
-  // convert to eigen
-  Eigen::Map<Eigen::Matrix<double, 7, 1>> q_initial(initial_state.q.data());
-  Eigen::Affine3d initial_transform(Eigen::Matrix4d::Map(initial_state.O_T_EE.data()));
-
+  // convert to eigenstd::array<double, 7> q_start{{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
   // set equilibrium point to current state
   position_d_ = initial_transform.translation();
   orientation_d_ = Eigen::Quaterniond(initial_transform.linear());
@@ -219,6 +235,25 @@ void CartesianPoseImpedanceController::update(const ros::Time& /*time*/,
       position_and_orientation_d_target_mutex_);
   position_d_ = filter_params_ * position_d_target_ + (1.0 - filter_params_) * position_d_;
   orientation_d_ = orientation_d_.slerp(filter_params_, orientation_d_target_);
+}
+
+void CartesianPoseExampleController::starting(const ros::Time& /* time */) {
+  initial_pose_ = cartesian_pose_handle_->getRobotState().O_T_EE_d;
+  elapsed_time_ = ros::Duration(0.0);
+}
+
+void CartesianPoseExampleController::update(const ros::Time& /* time */,
+                                            const ros::Duration& period) {
+  elapsed_time_ += period;
+
+  double radius = 0.3;
+  double angle = M_PI / 4 * (1 - std::cos(M_PI / 5.0 * elapsed_time_.toSec()));
+  double delta_x = radius * std::sin(angle);
+  double delta_z = radius * (std::cos(angle) - 1);
+  std::array<double, 16> new_pose = initial_pose_;
+  new_pose[12] -= delta_x;
+  new_pose[14] -= delta_z;
+  cartesian_pose_handle_->setCommand(new_pose);
 }
 
 Eigen::Matrix<double, 7, 1> CartesianPoseImpedanceController::saturateTorqueRate(

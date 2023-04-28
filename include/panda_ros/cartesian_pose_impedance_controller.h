@@ -24,7 +24,7 @@
 
 namespace panda_ros {
 
-class CartesianImpedanceEquilibriumController : public controller_interface::MultiInterfaceController<
+class CartesianPoseImpedanceController : public controller_interface::MultiInterfaceController<
                                                 franka_hw::FrankaModelInterface,
                                                 hardware_interface::EffortJointInterface,
                                                 franka_hw::FrankaStateInterface,
@@ -33,12 +33,7 @@ class CartesianImpedanceEquilibriumController : public controller_interface::Mul
   bool init(hardware_interface::RobotHW* robot_hw, ros::NodeHandle& node_handle) override;
   void starting(const ros::Time&) override;
   void update(const ros::Time&, const ros::Duration& period) override;
-
- private:
-  // Saturation
-  Eigen::Matrix<double, 7, 1> saturateTorqueRate(
-      const Eigen::Matrix<double, 7, 1>& tau_d_calculated,
-      const Eigen::Matrix<double, 7, 1>& tau_J_d);  // NOLINT (readability-identifier-naming)
+std::array<double, 7> q_start{{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};d);  // NOLINT (readability-identifier-naming)
 
   std::unique_ptr<franka_hw::FrankaStateHandle> state_handle_;
   std::unique_ptr<franka_hw::FrankaModelHandle> model_handle_;
@@ -76,6 +71,18 @@ class CartesianImpedanceEquilibriumController : public controller_interface::Mul
   ros::Subscriber sub_equilibrium_stiffness_;
   ros::Subscriber sub_impedance_mode_;
   void equilibriumPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg);
+
+
+  franka_hw::FrankaPoseCartesianInterface* cartesian_pose_interface_;
+  std::unique_ptr<franka_hw::FrankaCartesianPoseHandle> cartesian_pose_handle_;
+  ros::Duration elapsed_time_;
+  std::array<double, 16> initial_pose_{};
+
+
+  franka_hw::FrankaPoseCartesianInterface* cartesian_pose_interface_;
+  std::unique_ptr<franka_hw::FrankaCartesianPoseHandle> cartesian_pose_handle_;
+  ros::Duration elapsed_time_;
+  std::array<double, 16> initial_pose_{};
 };
 
 }  // namespace franka_example_controllers
