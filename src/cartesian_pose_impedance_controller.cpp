@@ -285,14 +285,10 @@ void CartesianPoseImpedanceController::complianceParamCallback(
   nullspace_stiffness_target_ = config.nullspace_stiffness;
 }
 
-void CartesianPoseImpedanceController::equilibriumStiffnessCallback(
-    const panda_ros::ImpedanceParams& config) {
-  
-  
-  std::cout << "MODE " << mode << std::endl;
+void CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback(
+    const panda_ros::StiffnessConfig& config) {
 
   if (mode == 0) {
-    std::cout << "LOOP MODE 0" << std::endl;
     cartesian_stiffness_target_.setIdentity();
     cartesian_stiffness_target_.topLeftCorner(3, 3)
         << 0 * Eigen::Matrix3d::Identity();
@@ -308,37 +304,49 @@ void CartesianPoseImpedanceController::equilibriumStiffnessCallback(
     nullspace_stiffness_target_ = 0;
   } else if (mode == 1) {
     Eigen::Matrix3d stiffness_tl = Eigen::Matrix3d::Zero(3, 3);
-    for (int i = 0; i < 3; i++ ) {
-        stiffness_tl.col(i).row(i) << config.data[i].value;
+    for (int i = 0; i < 3; i++) {
+      for (int j = 0; j < 3; j++)
+        stiffness_tl.col(j).row(i) << config.force[3*i+j];
     }
 
-    // Eigen::Matrix3d stiffness_br = Eigen::Matrix3d::Zero(3, 3);
-    // for (int i = 0; i < 3; i++ ) {
-    //     stiffness_tl.col(i+3).row(i+3) << config.data[i].value;
-    // }
+    Eigen::Matrix3d stiffness_br = Eigen::Matrix3d::Zero(3, 3);
+    for (int i = 0; i < 3; i++) {
+      for (int j = 0; j < 3; j++)
+        stiffness_br.col(j).row(i) << config.torque[3*i+j];
+    }
 
     cartesian_stiffness_target_.setIdentity();
     cartesian_stiffness_target_.topLeftCorner(3, 3)
         << stiffness_tl;
-        // << config.data[0].value * Eigen::Matrix3d::Identity();
     cartesian_stiffness_target_.bottomRightCorner(3, 3)
         // << stiffness_br;
-        << config.data[3].value * Eigen::Matrix3d::Identity();
-    cartesian_damping_target_.setIdentity();
-    // Damping ratio = 1
+        << 30 * Eigen::Matrix3d::Identity();
+    #undef VERBOSE
+    #ifdef VERBOSE
+      std::cout << "cartesian_stiffness_target_" << std::endl;
+      std::cout << cartesian_stiffness_target_ << std::endl;
+    #endif
 
+    cartesian_damping_target_.setIdentity();
     Eigen::Matrix3d damping_tl = Eigen::Matrix3d::Zero(3, 3);
+    Eigen::Matrix3d damping_br = Eigen::Matrix3d::Zero(3, 3);
     for (int i = 0; i < 3; i++ ) {
-        damping_tl.col(i).row(i) << 3.0 * sqrt(config.data[i].value);
+        damping_tl.col(i).row(i) << 3.0 * sqrt(config.force_mag);
+        damping_br.col(i).row(i) << 3.0 * sqrt(config.force_mag);
     }
+
     
     cartesian_damping_target_.topLeftCorner(3, 3)
-        << damping_tl;
-        // << 3.0 * sqrt(3*config.data[3].value) * Eigen::Matrix3d::Identity();
+        << 15 * Eigen::Matrix3d::Identity();
+        // << damping_tl;
     cartesian_damping_target_.bottomRightCorner(3, 3)
-        << 3.0 * sqrt(config.data[3].value) * Eigen::Matrix3d::Identity();
+        << 15 * Eigen::Matrix3d::Identity();
     // nullspace_stiffness_target_ = config.data[4].value/5;
-    nullspace_stiffness_target_ = 0;
+    #ifdef VERBOSE
+      std::cout << "cartesian_damping_target_" << std::endl;
+      std::cout << cartesian_damping_target_ << std::endl;
+      #endif
+    nullspace_stiffness_target_ = 10;
   }
   else {
     cartesian_stiffness_target_.setIdentity();

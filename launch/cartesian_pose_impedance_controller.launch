@@ -11,7 +11,7 @@
   <node name="print_text" pkg="rostopic" type="rostopic" args="echo $(find panda_ros)" output="screen"/>
   <rosparam command="load" file="$(find panda_ros)/config/panda_ros_controller.yaml" />
   <!-- <rosparam command="load" file="$(find franka_panda_controller_swc)/config/franka_panda_controller_swc.yaml" /> -->
-  <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="cartesian_impedance_equilibrium_controller"/>
+  <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="cartesian_pose_impedance_controller"/>
   <node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find franka_example_controllers)/launch/rviz/franka_description_with_marker.rviz"/>
   <node name="equilibrium_publisher" pkg="panda_ros" type="equilibrium_publisher_force_max.py" output="screen" required="true" >
     <param name="link_name" value="panda_link0" />

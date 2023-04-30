@@ -29,6 +29,9 @@ class paint_publisher:
 
 		self.robot_pose.header.frame_id = "panda_link0"
 
+		# Used for colouring
+		self.f_max_observable = 30
+
 		
 		self.pos_marker = Marker()
 
@@ -38,7 +41,7 @@ class paint_publisher:
 		self.cube_res = self.cube_res_factor * 10**(-self.cube_res_places)
 
 		# Side width of cube workspace (meters) (min is 2x max reach of robot)
-		self.cube_len = 2
+		self.cube_len = 4
 		self.cube_grid = np.zeros((int(self.cube_len/self.cube_res), int(self.cube_len/self.cube_res), int(self.cube_len/self.cube_res)), dtype=np.bool8)
 
 		# Unique Marker ID
@@ -97,6 +100,13 @@ class paint_publisher:
 
 
 	def generate_marker(self, state):
+
+		wrench_o = state.O_F_ext_hat_K
+		f_vec = np.array([wrench_o[0], wrench_o[1], wrench_o[2]])
+		
+		# Get Force and torque magnitude
+		f_mag = np.linalg.norm(f_vec)-4
+
 		x, y, z = self.snap_grid(state.O_T_EE[12], state.O_T_EE[13], state.O_T_EE[14])
 		# print(x, y, z)
 
@@ -108,11 +118,22 @@ class paint_publisher:
 		point.x = x
 		point.y = y
 		point.z = z
+
 		
+		rg_ratio = f_mag/self.f_max_observable
+
+		if rg_ratio < 0:
+			rg_ratio = 0
+		elif rg_ratio > 1:
+			rg_ratio = 1
+		
+		print((1 - rg_ratio) * 127)
+		print(rg_ratio * 127)
+
 		colour = ColorRGBA()
 		colour.a = 0.1
-		colour.r = 1
-		colour.g = 0
+		colour.r = (1 - rg_ratio) * 127
+		colour.g = rg_ratio * 127
 		colour.b = 0
 
 		self.pos_marker

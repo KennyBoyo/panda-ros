@@ -61,8 +61,8 @@ std::array<double, 7> q_start{{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};d
   ros::NodeHandle dynamic_reconfigure_compliance_param_node_;
   void complianceParamCallback(franka_example_controllers::compliance_paramConfig& config,
                                uint32_t level);
-  void equilibriumStiffnessCallback(
-                                const panda_ros::ImpedanceParams& config);
+  void CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback(
+                                const panda_ros::StiffnessConfig& config);
   void impedanceModeCallback(
                                 const std_msgs::Int8& config);
 
@@ -71,13 +71,6 @@ std::array<double, 7> q_start{{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};d
   ros::Subscriber sub_equilibrium_stiffness_;
   ros::Subscriber sub_impedance_mode_;
   void equilibriumPoseCallback(const geometry_msgs::PoseStampedConstPtr& msg);
-
-
-  franka_hw::FrankaPoseCartesianInterface* cartesian_pose_interface_;
-  std::unique_ptr<franka_hw::FrankaCartesianPoseHandle> cartesian_pose_handle_;
-  ros::Duration elapsed_time_;
-  std::array<double, 16> initial_pose_{};
-
 
   franka_hw::FrankaPoseCartesianInterface* cartesian_pose_interface_;
   std::unique_ptr<franka_hw::FrankaCartesianPoseHandle> cartesian_pose_handle_;

@@ -65,16 +65,20 @@ class equilibrium_publisher:
 
 		self.mode = 0
 
+		# Force logging
 		self.force_buffer_size = 10
 		self.force_buffer = [np.array([0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float64)] * self.force_buffer_size
 		self.force_buffer_index = 0
 		self.summed_force = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.float64)
 
-
-		self.max = np.array([300, 100, 100, 100, 300, 100, 100, 100, 300], dtype=np.float64)
+		# This is the initial stiffness matrix. Be carful with changing this, 
+		# since a non-positive definite matrix will cause instability and the robot will break.
+		self.max = np.array([200, 100, 100, 100, 200, 100, 100, 100, 200], dtype=np.float64)
 		self.current_stiffness = deepcopy(self.max)
+
+		
 		self.v_thres_low = 2
-		self.v_thres_high = 2.5
+		self.v_thres_high = 3
 		self.f_thres_low = 4
 		self.adjustment_queue = []
 
@@ -97,18 +101,6 @@ class equilibrium_publisher:
 											[equilibrium_pose.O_T_EE[3], equilibrium_pose.O_T_EE[7], equilibrium_pose.O_T_EE[11], equilibrium_pose.O_T_EE[15]]])
 			
 			# Set end effector robot position
-			# self.robot_pose.pose.position.x = max([min([state.O_T_EE[12],
-			# 									self.position_limits[0][1]]),
-			# 									self.position_limits[0][0]])
-
-			# self.robot_pose.pose.position.y = max([min([state.O_T_EE[13],
-			# 									self.position_limits[1][1]]),
-			# 									self.position_limits[1][0]])
-
-			# self.robot_pose.pose.position.z = max([min([state.O_T_EE[14],
-			# 									self.position_limits[2][1]]),
-			# 									self.position_limits[2][0]])
-
 			self.robot_pose.pose.position.x = equilibrium_pose.O_T_EE[12]
 
 			self.robot_pose.pose.position.y = equilibrium_pose.O_T_EE[13]
@@ -122,11 +114,10 @@ class equilibrium_publisher:
 			self.robot_pose.pose.orientation.w = quat[3]
 			self.generate_marker(state)
 
-			# Publish pose
+			# Publish equilibrium pose
 			self.pub.publish(self.robot_pose)
 
-			# Publish Stiffnesses
-			# self.set_force_k(state)
+			# Publish updated stiffnesses
 			self.adjust_stiffness(state)
 	
 	def set_force_k(self, state):
@@ -186,6 +177,7 @@ class equilibrium_publisher:
 
 	def impedance_mode_callback(self, msg):
 		rospy.loginfo(self.mode)
+		self.reset_stiffness()
 		self.mode = msg.data
 
 	def generate_marker(self, state):
@@ -270,6 +262,7 @@ class equilibrium_publisher:
 
 		# Adjustment matrix is a unit step in the direction of force
 		adjustment_matrix = 2*np.array(f_mat/np.linalg.norm(f_mat), dtype = np.float64)
+		# print(adjustment_matrix.shape)
 
 		if (vel < self.v_thres_low):
 			if (f_mag > self.f_thres_low):
@@ -277,7 +270,16 @@ class equilibrium_publisher:
 				for i in range(len(temp_stiff)):
 					if temp_stiff[i] < 0:
 						adjustment_matrix[i] += temp_stiff[i]
+						temp_stiff[i] = 0
+					
+				temp_stff_mat = temp_stiff.reshape(3, 3)
+				det = np.linalg.det(temp_stff_mat)
+				if det < 0:
+					# adjustment_matrix = np.zeros(adjustment_matrix.shape[0])
+					return
 				
+				print(det)
+
 				self.adjustment_queue.append(adjustment_matrix)
 				self.current_stiffness -= adjustment_matrix
 			else:
@@ -299,6 +301,10 @@ class equilibrium_publisher:
 			print(self.current_stiffness)
 
 		self.force_stiff.publish(stiffness_config)
+
+	def reset_stiffness(self):
+		self.current_stiffness = deepcopy(self.max)
+		self.adjustment_queue = []
 
 		
 

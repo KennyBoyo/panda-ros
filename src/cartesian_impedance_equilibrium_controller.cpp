@@ -284,9 +284,11 @@ void CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback(
     cartesian_stiffness_target_.bottomRightCorner(3, 3)
         // << stiffness_br;
         << 30 * Eigen::Matrix3d::Identity();
-
-    std::cout << "cartesian_stiffness_target_" << std::endl;
-    std::cout << cartesian_stiffness_target_ << std::endl;
+    #undef VERBOSE
+    #ifdef VERBOSE
+      std::cout << "cartesian_stiffness_target_" << std::endl;
+      std::cout << cartesian_stiffness_target_ << std::endl;
+    #endif
 
     cartesian_damping_target_.setIdentity();
     Eigen::Matrix3d damping_tl = Eigen::Matrix3d::Zero(3, 3);
@@ -298,13 +300,15 @@ void CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback(
 
     
     cartesian_damping_target_.topLeftCorner(3, 3)
-        << 10 * Eigen::Matrix3d::Identity();
+        << 15 * Eigen::Matrix3d::Identity();
         // << damping_tl;
     cartesian_damping_target_.bottomRightCorner(3, 3)
-        << 10 * Eigen::Matrix3d::Identity();
+        << 15 * Eigen::Matrix3d::Identity();
     // nullspace_stiffness_target_ = config.data[4].value/5;
-    std::cout << "cartesian_damping_target_" << std::endl;
-    std::cout << cartesian_damping_target_ << std::endl;
+    #ifdef VERBOSE
+      std::cout << "cartesian_damping_target_" << std::endl;
+      std::cout << cartesian_damping_target_ << std::endl;
+      #endif
     nullspace_stiffness_target_ = 10;
   }
   else {
