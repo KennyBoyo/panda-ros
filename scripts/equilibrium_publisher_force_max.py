@@ -73,7 +73,7 @@ class equilibrium_publisher:
 
 		# This is the initial stiffness matrix. Be carful with changing this, 
 		# since a non-positive definite matrix will cause instability and the robot will break.
-		self.max = np.array([200, 100, 100, 100, 200, 100, 100, 100, 200], dtype=np.float64)
+		self.max = np.array([250, 100, 100, 100, 250, 100, 100, 100, 250], dtype=np.float64)
 		self.current_stiffness = deepcopy(self.max)
 
 		
