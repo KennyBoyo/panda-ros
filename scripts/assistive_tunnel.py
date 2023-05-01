@@ -2,7 +2,7 @@
 import rospy 
 import sys
 from std_msgs.msg import Float64
-from geometry_msgs.msg import PoseStamped, TransformStamped, Vector3
+from geometry_msgs.msg import PoseStamped, TransformStamped, Vector3, Quaternion
 from dynamic_reconfigure.msg import DoubleParameter
 from nav_msgs.msg import Path
 from panda_ros.msg import ImpedanceParams
@@ -83,7 +83,7 @@ def trajectory_generator(p0, n):
 def spline_trajectory_generator(p0, degree, n):
 	cv = [[0,0,0],
        		[0.1, 0.1, 0.1],
-			[0.2, 0.2, 0.4],
+			[0.2, 0.2, 0.3],
 			[0.5, -0.2, 0.2],
 			[0.7, 0.2, -0.1]]
 	cv = np.asarray(cv)
@@ -150,19 +150,26 @@ class AssistiveTunnelController():
 		if not self.initialisedTrajectory:
 			self.initialise_trajectory(T_current)
 			self.initialisedTrajectory = True
+			
+			rot_mat = np.array([[1, 0, 0 ,0],
+		       					[0,-1, 0, 0],
+								[0, 0,-1, 0],
+								[0, 0, 0, 1]]) # To fix the end effector orientation
+			# self.desired_rot = tr.quaternion_from_matrix(np.asarray(T_current).reshape(4,4))
+			self.desired_rot = tr.quaternion_from_matrix(rot_mat)
+
 
 		p_current = np.array([T_current[px], T_current[py], T_current[pz]])
 		min_idx, p_min, d_min = self.nearest_point_on_trajectory(p_current, 5)
 
 		K, p_reference = self.get_distance_model_update_parameters(d_min, p_min, p_current)
-		
 		# Publish updated parameters
-		self.publish_updated_parameters(T_current, K, p_reference)
+		self.publish_updated_parameters(T_current, K, p_reference, self.desired_rot)		
 
 		# Publish trajectory and nearest point for visualisation
 		self.pathMsg.header.stamp = rospy.Time.now()
 		self.trajectory_publisher.publish(self.pathMsg)
-		self.visualise_nearest_trajectory_point(p_reference, T_current)
+		self.visualise_nearest_trajectory_point(p_reference, T_current, self.desired_rot)
 
 	def nearest_point_on_trajectory(self, pos: np.array, vicinity_idx: int):
 		prev_idx = self.pn_idx 
@@ -181,7 +188,7 @@ class AssistiveTunnelController():
 		self.pn_idx = min_idx
 		return min_idx, p_min, d_min
 
-	def visualise_nearest_trajectory_point(self, p_ref, trans_mat):
+	def visualise_nearest_trajectory_point(self, p_ref, trans_mat, desired_rot):
 	
 		br = tf2_ros.TransformBroadcaster()
 		tf = transformation_matrix_to_TransformStamped(trans_mat, PARENT_FRAME, "p_ref")
@@ -189,7 +196,9 @@ class AssistiveTunnelController():
 		# Change translation to the nearest reference position on the trajectory
 		x, y, z = p_ref
 		referencePosition = Vector3(x,y,z)
+		referenceRot = Quaternion(*desired_rot)
 		tf.transform.translation = referencePosition
+		tf.transform.rotation = referenceRot
 		br.sendTransform(tf)
 
 	def get_tolerance_tunnel_model_update_paramaters(self, d: np.double, p_min, p_current):
@@ -224,12 +233,17 @@ class AssistiveTunnelController():
 		# Overall assistance 
 		return K_default * self.k_max, p_min
 
-	def publish_updated_parameters(self, trans_mat, K_new, p_eqm_new):
+	def publish_updated_parameters(self, trans_mat, K_new, p_eqm_new, desired_rot):
 		# Equilibrium position
 		eqm_msg = transformation_matrix_to_PoseStamped(trans_mat, PARENT_FRAME)
 		eqm_msg.pose.position.x = p_eqm_new[0]
 		eqm_msg.pose.position.y = p_eqm_new[1]
 		eqm_msg.pose.position.z = p_eqm_new[2]
+		eqm_msg.pose.orientation.x = desired_rot[0]
+		eqm_msg.pose.orientation.y = desired_rot[1]
+		eqm_msg.pose.orientation.z = desired_rot[2]
+		eqm_msg.pose.orientation.w = desired_rot[3]
+
 
 		self.equilibrium_position_publisher.publish(eqm_msg)
 		
@@ -240,7 +254,7 @@ class AssistiveTunnelController():
 			impedance_msg.data.append(DoubleParameter(name = label, value = value))
 
 		# translational_stiffness = DoubleParameter(name="translational_stiffness", value= list(K_new))
-		impedance_msg.data.append(DoubleParameter(name="rotational_stiffness", value=0))
+		impedance_msg.data.append(DoubleParameter(name="rotational_stiffness", value=30))
 		impedance_msg.data.append(DoubleParameter(name="nullspace_stiffness", value=0))
 		
 		self.stiffness_matrix_publisher.publish(impedance_msg)
