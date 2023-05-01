@@ -278,7 +278,7 @@ class equilibrium_publisher:
 					# adjustment_matrix = np.zeros(adjustment_matrix.shape[0])
 					return
 				
-				print(det)
+				# print(det)
 
 				self.adjustment_queue.append(adjustment_matrix)
 				self.current_stiffness -= adjustment_matrix

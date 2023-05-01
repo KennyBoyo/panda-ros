@@ -81,7 +81,7 @@ cartesian_impedance_equilibrium_controller:
         - panda_joint7
 
 cartesian_pose_impedance_controller:
-    type: panda_ros/CartesianImpedanceEquilibriumController
+    type: panda_ros/CartesianPoseImpedanceController
     arm_id: panda
     joint_names:
         - panda_joint1

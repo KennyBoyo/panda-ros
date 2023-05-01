@@ -9,7 +9,6 @@
 #include <ros/console.h>
 #include <franka/robot_state.h>
 #include <pluginlib/class_list_macros.h>
-#include <panda_ros/ImpedanceParams.h>
 #include <panda_ros/StiffnessConfig.h>
 #include <ros/ros.h>
 

@@ -127,8 +127,8 @@ class paint_publisher:
 		elif rg_ratio > 1:
 			rg_ratio = 1
 		
-		print((1 - rg_ratio) * 127)
-		print(rg_ratio * 127)
+		# print((1 - rg_ratio) * 127)
+		# print(rg_ratio * 127)
 
 		colour = ColorRGBA()
 		colour.a = 0.1

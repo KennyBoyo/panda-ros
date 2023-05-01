@@ -26,6 +26,7 @@ find_package(Eigen3 REQUIRED)
 find_package(Franka 0.7.0 REQUIRED)
 
 add_message_files(FILES
+  PoseCommand.msg
   StiffnessConfig.msg
   ForceOutput.msg
   ImpedanceParams.msg
@@ -69,6 +70,7 @@ add_library(panda_ros
   src/cartesian_impedance_controller_NR.cpp
   src/cartesian_impedance_controller.cpp
   src/cartesian_impedance_equilibrium_controller.cpp
+  src/cartesian_pose_impedance_controller.cpp
   src/joint_position_controller.cpp
   src/joint_velocity_controller.cpp
   src/dual_arm_cartesian_impedance_controller.cpp
