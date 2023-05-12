@@ -9,6 +9,7 @@ from std_msgs.msg import String, Int8, ColorRGBA
 from geometry_msgs.msg import PointStamped, PoseStamped, Point, WrenchStamped
 from dynamic_reconfigure.msg import Config, DoubleParameter, GroupState
 from std_msgs.msg import Int16MultiArray
+from sensor_msgs.msg import JointState
 from visualization_msgs.msg import MarkerArray, Marker
 from franka_msgs.msg import FrankaState
 import tf.transformations as tr
@@ -21,6 +22,7 @@ class paint_publisher:
 		self.sub = rospy.Subscriber("/franka_state_controller/franka_states", FrankaState, self.paint)
 		self.pub = rospy.Publisher("/cartesian_impedance_equilibrium_controller/painting", Marker, queue_size=5)
 		self.workspace_pub = rospy.Publisher("/cartesian_impedance_equilibrium_controller/robot_workspace_approx", Marker, queue_size=5)
+		self.unity_pub = rospy.Publisher("/unity/painting", JointState, queue_size=5)
 
 		self.robot_pose_eq = PoseStamped()
 		self.robot_pose = PoseStamped()
@@ -99,7 +101,7 @@ class paint_publisher:
 
 
 
-	def generate_marker(self, state):
+	def generate_marker(self, state: FrankaState):
 
 		wrench_o = state.O_F_ext_hat_K
 		f_vec = np.array([wrench_o[0], wrench_o[1], wrench_o[2]])
@@ -126,14 +128,11 @@ class paint_publisher:
 			rg_ratio = 0
 		elif rg_ratio > 1:
 			rg_ratio = 1
-		
-		# print((1 - rg_ratio) * 127)
-		# print(rg_ratio * 127)
 
 		colour = ColorRGBA()
-		colour.a = 0.1
-		colour.r = (1 - rg_ratio) * 127
-		colour.g = rg_ratio * 127
+		colour.a = 0.5
+		colour.r = (1 - rg_ratio) #* 127
+		colour.g = rg_ratio #* 127
 		colour.b = 0
 
 		self.pos_marker
@@ -143,6 +142,7 @@ class paint_publisher:
 		# print(self.pos_marker)
 
 		# self.pos_markers.markers.append(pos_marker)
+		self.pub_to_unity(x, y, z, colour.a, colour.r, colour.g, colour.b, wrench_o)
 		self.pub.publish(self.pos_marker)
 
 
@@ -154,6 +154,16 @@ class paint_publisher:
 			self.cube_grid[x,y,z] = 1
 			return True
 		return False
+	
+	def pub_to_unity(self, x, y, z, a, r, g, b, s):
+		js = JointState()
+		js.header.stamp = rospy.Time.now()
+
+		js.position = [x, y, z]
+		js.velocity = [r, g, b, a]
+		js.effort = [self.cube_res]
+
+		self.unity_pub.publish(js)
 
 
 	def snap_grid(self, x, y, z):

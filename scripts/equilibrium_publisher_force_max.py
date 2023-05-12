@@ -73,18 +73,21 @@ class equilibrium_publisher:
 
 		# This is the initial stiffness matrix. Be carful with changing this, 
 		# since a non-positive definite matrix will cause instability and the robot will break.
-		self.max = np.array([250, 100, 100, 100, 250, 100, 100, 100, 250], dtype=np.float64)
+		self.stiff_init_max = 200
+		self.stiff_init_min = 50
+		self.max = np.array([self.stiff_init_max, self.stiff_init_min, self.stiff_init_min, 
+		       self.stiff_init_min, self.stiff_init_max, self.stiff_init_min, 
+			   self.stiff_init_min, self.stiff_init_min, self.stiff_init_max], dtype=np.float64)
 		self.current_stiffness = deepcopy(self.max)
 
 		
-		self.v_thres_low = 2
-		self.v_thres_high = 3
+		self.v_thres_low = 0.1
+		self.v_thres_high = 0.15
 		self.f_thres_low = 4
 		self.adjustment_queue = []
 
 
 	def equilibrium_adjuster_callback(self, state: FrankaState):
-
 		self.robot_pose_list[self.pose_index] = state
 		self.pose_index += 1
 		if (self.pose_index == self.pose_buffer_size):
@@ -248,15 +251,20 @@ class equilibrium_publisher:
 		f_dir = f_vec / f_mag
 
 		# v = d / dt
-		index_delay = 1
+		index_delay = 10
 		dist = np.linalg.norm([self.robot_pose.pose.position.x - self.robot_pose_list[(self.pose_index - index_delay) % self.pose_buffer_size].O_T_EE[12],\
 							self.robot_pose.pose.position.y - self.robot_pose_list[(self.pose_index - index_delay) % self.pose_buffer_size].O_T_EE[13],\
 							self.robot_pose.pose.position.z - self.robot_pose_list[(self.pose_index - index_delay) % self.pose_buffer_size].O_T_EE[14]])
-		vel = dist*30/index_delay
+		
+		dt = self.robot_pose.header.stamp.to_sec() - self.robot_pose_list[(self.pose_index - index_delay) % self.pose_buffer_size].header.stamp.to_sec()
+		
+		vel = dist/dt
+		
 		if (verbose):
-			print("Force = ", f_mag)
-			print("Velocity = ", vel)
-			print("Distance = ", dist)
+			print("Time =", dt)
+			print("Force =", f_mag)
+			print("Velocity =", vel)
+			print("Distance =", dist)
 		
 		f_mat = self.get_rotated_ellipsoid(f_dir).reshape(-1)
 
