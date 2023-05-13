@@ -1,11 +1,6 @@
-import datetime
-
-import dash
-from dash import dcc, html
-import plotly
-from dash.dependencies import Input, Output
-
+#!/usr/bin/env python3
 import rospy
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -13,6 +8,11 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import multiprocessing
+from multiprocessing import shared_memory
+from sensor_msgs.msg import JointState
+import dash
+from dash import dcc, html
+from dash.dependencies import Input, Output
 
 def rot_mat(angle, dir):
 	if dir == 'x':
@@ -25,7 +25,7 @@ def rot_mat(angle, dir):
 
 def parse_data(angles, effort, res=100):
 	for i in range(len(angles)):
-		angles[i] = cartesian2sphere(shoulder2cartesian(angles[i]))
+		angles[i, :3] = cartesian2sphere(shoulder2cartesian(angles[i, :3]))
 		
 	theta_bins, theta_borders = gen_bins(-np.pi, np.pi, 2*res)
 	phi_bins, phi_borders = gen_bins(0, np.pi, res)
@@ -33,7 +33,7 @@ def parse_data(angles, effort, res=100):
 	theta_indices = np.digitize(angles[:, 0], theta_borders)
 	phi_indices = np.digitize(angles[:, 1], phi_borders)
 
-	mags = np.sum(np.abs(effort[:])**2,axis=-1)**(1./2)
+	mags = np.sum(np.abs(effort[:3])**2,axis=-1)**(1./2)
 	
 	return np.stack((theta_indices, phi_indices), axis=1), mags
 
@@ -67,15 +67,15 @@ def plot_3d_objects(data, axes_size=100, axes=True):
 					z=1,
 				)
 			),
-			aspectratio = dict( x=1, y=1, z=1 ),
-			aspectmode = 'manual'
+			# aspectratio = dict( x=1, y=1, z=1 ),
+			# aspectmode = 'manual'
 		),
 	)
 	return fig
 
 def shoulder2cartesian(angles, base=np.array([0, -1, 0])  ):
 	# Converts shoulder angles (Flexion, adduction, rotation) to cartesian coodinates TODO:MAKE SURE TO CHECK SHOULDER ANGLE ORDER
-	return rot_mat(angles[0], 'z') @ rot_mat(angles[1], 'x') @ rot_mat(angles[0], 'z').T @ rot_mat(angles[0], 'z') @ base * angles[2]
+	return rot_mat(angles[0], 'z') @ rot_mat(angles[2], 'x') @  base
 
 def cartesian2sphere(coords):
 	# Converts cartesian coodinates to spherical coordinates
@@ -86,7 +86,22 @@ def cartesian2sphere(coords):
 	mag = np.sqrt(xy + z**2)
 	theta = np.arctan2(y, x)
 	phi = np.arctan2(np.sqrt(xy), z)
+
 	return theta, phi, mag
+
+# def cartesian2sphere(coords):
+# 	# Converts cartesian coodinates to spherical coordinates
+# 	print(coords)
+# 	x = coords[0]
+# 	y = coords[1]
+# 	z = coords[2]
+# 	xz = x**2 + z**2
+# 	mag = np.sqrt(xz + y**2)
+# 	theta = np.arctan2(z, x)
+# 	phi = np.arctan2(np.sqrt(xz), y)
+# 	print("tp:", theta, phi)
+
+# 	return theta, phi, mag
 
 def generate_data(n_points, seed=0):
 	return np.random.uniform(-np.pi, np.pi, (n_points, 3))
@@ -102,49 +117,54 @@ def gen_bins(low, high, res=100):
 	return bins, borders
 
 
+# ====================================================================================================================
+# Constants
+# ====================================================================================================================
 
-# satellite = Orbital('TERRA')
+mag_pipe = 'data/mag_pipe.txt'
+count_pipe = 'data/count_pipe.txt'
+plot_res = 15
+mag_array = 0.25*np.ones((2*plot_res, plot_res))
+count_array = np.ones((2*plot_res, plot_res))
 
-# external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
-
+# ====================================================================================================================
+# Webapp for displaying analytics
+# ====================================================================================================================
 app = dash.Dash(__name__)
-app.layout = html.Div(
-    html.Div([
-        dcc.Graph(id='live-graph'),
-        dcc.Interval(
-            id='timer',
-            interval=5*1000, # in milliseconds
-            n_intervals=0
-        )
-    ])
+app.layout = html.Div([
+		dcc.Graph(id='live-graph'),
+		dcc.Interval(
+			id='timer',
+			interval=1000, # in milliseconds
+			n_intervals=0
+		)
+	]
 )
 
 # Multiple components can update everytime interval gets fired.
 @app.callback(Output('live-graph', 'figure'),
-              Input('timer', 'n_intervals'))
+			Input('timer', 'n_intervals'))
 def update_graph_live(n):
-    print(n)
-    res = 15
-    angles = generate_data(10000)
-    effort = generate_data(10000)
-    theta_bins, theta_borders = gen_bins(-np.pi, np.pi, 2*res)
-    phi_bins, phi_borders = gen_bins(0, np.pi, res)
+	with open(mag_pipe, 'rb') as f:
+			mag_array = np.loadtxt(f)
+	with open(count_pipe, 'rb') as f:
+			count_array = np.loadtxt(f)
+	data = []
+	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, mag_array, plot_res)
+	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array))
+	fig = plot_3d_objects(data, 1)
+	fig.update_layout(uirevision=True)
+	fig.update_layout(width=int(1000))
+	fig.update_layout(height=int(1000))
 
-    indices, mags = parse_data(angles, effort, res)
-    r = np.random.uniform(0.25, 0.25, (2*res, res))
+	return fig
 
-    for i in range(len(indices)):
-        # print(i)
-        r[indices[i][0]-2, indices[i][1]-2] += mags[i]
-
-    data = []
-    (x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, r, res)
-    data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=x_pns_surface**2 + y_pns_surface**2 + z_pns_surface**2))
-
-    fig = plot_3d_objects(data, 75)
-
-    return fig
+# ====================================================================================================================
+# Main
+# ====================================================================================================================
+def main(args):
+	app.run_server(debug=True)
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+	main(sys.argv)

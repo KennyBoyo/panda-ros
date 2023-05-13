@@ -137,31 +137,11 @@ def gen_bins(low, high, res=100):
 # ====================================================================================================================
 # Constants
 # ====================================================================================================================
-lock = multiprocessing.Lock()
-shm_name = 'random1'
+mag_pipe = 'data/mag_pipe.txt'
+count_pipe = 'data/count_pipe.txt'
 plot_res = 15
 mag_array = 0.25*np.ones((2*plot_res, plot_res))
 count_array = np.ones((2*plot_res, plot_res))
-
-# ====================================================================================================================
-# Threading
-# ====================================================================================================================
-def create_shared_memory_nparray():
-	NP_DATA_TYPE = np.float64
-	d_size = np.dtype(NP_DATA_TYPE).itemsize * 2 * (plot_res**2)
-
-	shm = shared_memory.SharedMemory(create=True, size=d_size, name=shm_name)
-	# numpy array on shared memory buffer
-	dst = np.ndarray(shape=(2*plot_res, plot_res), dtype=NP_DATA_TYPE, buffer=shm.buf)
-	dst[:] = 0.25*np.ones((2*plot_res, plot_res))
-	# print(f'NP SIZE: {(dst.nbytes / 1024) / 1024}')
-	return shm
-
-def release_shared(name):
-	shm = shared_memory.SharedMemory(name=name)
-	shm.close()
-	shm.unlink()  # Free and release the shared memory block
-
 
 # ====================================================================================================================
 # Ros Subscriber
@@ -186,76 +166,22 @@ class AnalyticsNode:
 			curr_mag = mag_array[indices[i][0]-2, indices[i][1]-2]
 			mag_array[indices[i][0]-2, indices[i][1]-2] = (curr_mag * curr_count + mags[i]) / (curr_count + 1)
 			count_array[indices[i][0]-2, indices[i][1]-2] += 1
+			
+		np.savetxt(mag_pipe, mag_array)
+		np.savetxt(count_pipe, count_array)
 
-
-		
-
-		# existing_shm = shared_memory.SharedMemory(name=shm_name)
-		# lock.acquire()
-		# np_array = np.ndarray((2*plot_res, plot_res,), dtype=np.int64, buffer=existing_shm.buf)
-		# for i in range(len(indices)):
-		# 	np_array[indices[i][0]-2, indices[i][1]-2] = mags[i]
-		# lock.release()
-
-
-
-# ====================================================================================================================
-# Webapp for displaying analytics
-# ====================================================================================================================
-app = dash.Dash(__name__)
-app.layout = html.Div(
-	html.Div([
-		dcc.Graph(id='live-graph'),
-		dcc.Interval(
-			id='timer',
-			interval=1000, # in milliseconds
-			n_intervals=0
-		)
-	])
-)
-
-# Multiple components can update everytime interval gets fired.
-@app.callback(Output('live-graph', 'figure'),
-			Input('timer', 'n_intervals'))
-def update_graph_live(n):
-	# existing_shm = shared_memory.SharedMemory(name=shm_name)
-	
-	data = []
-	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, mag_array, plot_res)
-	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array))
-	fig = plot_3d_objects(data, 1)
-	fig.update_layout(uirevision=True)
-
-	return fig
-
-
-def start_ros():
-	rospy.init_node("analytics_node", anonymous=True)
-	an = AnalyticsNode()
-	try:
-		rospy.spin()
-	except KeyboardInterrupt:
-		print("Shutting down")
 
 # ====================================================================================================================
 # Main
 # ====================================================================================================================
 def main(args):
-	# print(multiprocessing.current_process().name)
-	# if multiprocessing.current_process().name == "MainProcess":
-	# 		print("HIIHIHIHI")
-	# shm = create_shared_memory_nparray()
 	rospy.init_node("analytics_node", anonymous=True)
 	an = AnalyticsNode()
 	
 	try:
-		app.run_server(debug=True)
+		rospy.spin()
 	except KeyboardInterrupt:
 		print("Shutting down")
-	# try:
-	# 	rospy.spin()
-	# except KeyboardInterrupt:
-	# 	print("Shutting down")
 
 
 if __name__ == '__main__':
