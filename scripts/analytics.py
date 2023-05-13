@@ -9,7 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import multiprocessing
 from multiprocessing import shared_memory
-from franka_msgs.msg import FrankaState
+from sensor_msgs.msg import JointState
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
@@ -25,7 +25,7 @@ def rot_mat(angle, dir):
 
 def parse_data(angles, effort, res=100):
 	for i in range(len(angles)):
-		angles[i] = cartesian2sphere(shoulder2cartesian(angles[i]))
+		angles[i, :3] = cartesian2sphere(shoulder2cartesian(angles[i, :3]))
 		
 	theta_bins, theta_borders = gen_bins(-np.pi, np.pi, 2*res)
 	phi_bins, phi_borders = gen_bins(0, np.pi, res)
@@ -33,7 +33,7 @@ def parse_data(angles, effort, res=100):
 	theta_indices = np.digitize(angles[:, 0], theta_borders)
 	phi_indices = np.digitize(angles[:, 1], phi_borders)
 
-	mags = np.sum(np.abs(effort[:])**2,axis=-1)**(1./2)
+	mags = np.sum(np.abs(effort[:3])**2,axis=-1)**(1./2)
 	
 	return np.stack((theta_indices, phi_indices), axis=1), mags
 
@@ -75,7 +75,7 @@ def plot_3d_objects(data, axes_size=100, axes=True):
 
 def shoulder2cartesian(angles, base=np.array([0, -1, 0])  ):
 	# Converts shoulder angles (Flexion, adduction, rotation) to cartesian coodinates TODO:MAKE SURE TO CHECK SHOULDER ANGLE ORDER
-	return rot_mat(angles[0], 'z') @ rot_mat(angles[1], 'x') @ rot_mat(angles[0], 'z').T @ rot_mat(angles[0], 'z') @ base * angles[2]
+	return rot_mat(angles[0], 'z') @ rot_mat(angles[2], 'x') @  base
 
 def cartesian2sphere(coords):
 	# Converts cartesian coodinates to spherical coordinates
@@ -86,7 +86,22 @@ def cartesian2sphere(coords):
 	mag = np.sqrt(xy + z**2)
 	theta = np.arctan2(y, x)
 	phi = np.arctan2(np.sqrt(xy), z)
+
 	return theta, phi, mag
+
+# def cartesian2sphere(coords):
+# 	# Converts cartesian coodinates to spherical coordinates
+# 	print(coords)
+# 	x = coords[0]
+# 	y = coords[1]
+# 	z = coords[2]
+# 	xz = x**2 + z**2
+# 	mag = np.sqrt(xz + y**2)
+# 	theta = np.arctan2(z, x)
+# 	phi = np.arctan2(np.sqrt(xz), y)
+# 	print("tp:", theta, phi)
+
+# 	return theta, phi, mag
 
 def generate_data(n_points, seed=0):
 	return np.random.uniform(-np.pi, np.pi, (n_points, 3))
@@ -125,7 +140,8 @@ def gen_bins(low, high, res=100):
 lock = multiprocessing.Lock()
 shm_name = 'random1'
 plot_res = 15
-np_array = 0.25*np.ones((2*plot_res, plot_res))
+mag_array = 0.25*np.ones((2*plot_res, plot_res))
+count_array = np.ones((2*plot_res, plot_res))
 
 # ====================================================================================================================
 # Threading
@@ -152,17 +168,25 @@ def release_shared(name):
 # ====================================================================================================================
 class AnalyticsNode:
 	def __init__(self):
-		self.sub = rospy.Subscriber("/franka_state_controller/franka_states", FrankaState, self.callback)
+		self.sub = rospy.Subscriber("/os3/step_problem_solution", JointState, self.callback)
 		
-	def callback(self, franka_state: FrankaState):
+	def callback(self, js: JointState):
 		res = 15
-		angles = generate_data(10000)
-		effort = generate_data(10000)
+		# mag_array = np.append(an)
+		# angles = generate_data(10000)
+		# effort = generate_data(10000)
+
+		angles = np.array([js.position]) 
+		effort = np.array([js.effort])
 
 		indices, mags = parse_data(angles, effort, res)
 
 		for i in range(len(indices)):
-			np_array[indices[i][0]-2, indices[i][1]-2] = mags[i]
+			curr_count = count_array[indices[i][0]-2, indices[i][1]-2]
+			curr_mag = mag_array[indices[i][0]-2, indices[i][1]-2]
+			mag_array[indices[i][0]-2, indices[i][1]-2] = (curr_mag * curr_count + mags[i]) / (curr_count + 1)
+			count_array[indices[i][0]-2, indices[i][1]-2] += 1
+
 
 		
 
@@ -179,13 +203,12 @@ class AnalyticsNode:
 # Webapp for displaying analytics
 # ====================================================================================================================
 app = dash.Dash(__name__)
-# self.app = dash.Dash(__name__)
 app.layout = html.Div(
 	html.Div([
 		dcc.Graph(id='live-graph'),
 		dcc.Interval(
 			id='timer',
-			interval=5*1000, # in milliseconds
+			interval=2*1000, # in milliseconds
 			n_intervals=0
 		)
 	])
@@ -198,9 +221,9 @@ def update_graph_live(n):
 	# existing_shm = shared_memory.SharedMemory(name=shm_name)
 	
 	data = []
-	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, np_array, plot_res)
+	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, mag_array, plot_res)
 	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=x_pns_surface**2 + y_pns_surface**2 + z_pns_surface**2))
-	fig = plot_3d_objects(data, 5)
+	fig = plot_3d_objects(data, 1)
 
 	return fig
 
@@ -226,7 +249,6 @@ def main(args):
 	
 	try:
 		app.run_server(debug=True)
-		print("after")
 	except KeyboardInterrupt:
 		print("Shutting down")
 	# try:
