@@ -5,8 +5,6 @@ from dash import dcc, html
 import plotly
 from dash.dependencies import Input, Output
 
-# pip install pyorbital
-from pyorbital.orbital import Orbital
 import rospy
 import numpy as np
 import matplotlib.pyplot as plt

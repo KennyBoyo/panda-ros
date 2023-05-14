@@ -89,6 +89,20 @@ def cartesian2sphere(coords):
 
 	return theta, phi, mag
 
+# def cartesian2sphere(coords):
+# 	# Converts cartesian coodinates to spherical coordinates
+# 	print(coords)
+# 	x = coords[0]
+# 	y = coords[1]
+# 	z = coords[2]
+# 	xz = x**2 + z**2
+# 	mag = np.sqrt(xz + y**2)
+# 	theta = np.arctan2(z, x)
+# 	phi = np.arctan2(np.sqrt(xz), y)
+# 	print("tp:", theta, phi)
+
+# 	return theta, phi, mag
+
 def generate_data(n_points, seed=0):
 	return np.random.uniform(-np.pi, np.pi, (n_points, 3))
 
@@ -123,8 +137,8 @@ def gen_bins(low, high, res=100):
 # ====================================================================================================================
 # Constants
 # ====================================================================================================================
-mag_pipe = 'data/mag_pipe'
-count_pipe = 'data/count_pipe'
+mag_pipe = 'data/mag_pipe.txt'
+count_pipe = 'data/count_pipe.txt'
 plot_res = 15
 mag_array = 0.25*np.ones((2*plot_res, plot_res))
 count_array = np.ones((2*plot_res, plot_res))
@@ -152,7 +166,11 @@ class AnalyticsNode:
 			curr_mag = mag_array[indices[i][0]-2, indices[i][1]-2]
 			mag_array[indices[i][0]-2, indices[i][1]-2] = (curr_mag * curr_count + mags[i]) / (curr_count + 1)
 			count_array[indices[i][0]-2, indices[i][1]-2] += 1
+<<<<<<< HEAD
 
+=======
+			
+>>>>>>> f1301ab5158f66cd0e390775faefd1873d774c67
 		np.savetxt(mag_pipe, mag_array)
 		np.savetxt(count_pipe, count_array)
 

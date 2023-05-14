@@ -122,6 +122,14 @@ def gen_bins(low, high, res=100):
 mag_pipe = 'data/mag_pipe'
 count_pipe = 'data/count_pipe'
 coord_pipe = 'data/coord_pipe'
+
+# ====================================================================================================================
+# Constants
+# ====================================================================================================================
+
+mag_pipe = 'data/mag_pipe.txt'
+count_pipe = 'data/count_pipe.txt'
+coord_pipe = 'data/coord_pipe'
 plot_res = 15
 mag_array = 0.25*np.ones((2*plot_res, plot_res))
 count_array = np.ones((2*plot_res, plot_res))

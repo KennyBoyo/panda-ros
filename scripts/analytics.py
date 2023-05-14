@@ -208,7 +208,7 @@ app.layout = html.Div(
 		dcc.Graph(id='live-graph'),
 		dcc.Interval(
 			id='timer',
-			interval=2*1000, # in milliseconds
+			interval=1000, # in milliseconds
 			n_intervals=0
 		)
 	])
@@ -222,8 +222,9 @@ def update_graph_live(n):
 	
 	data = []
 	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, mag_array, plot_res)
-	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=x_pns_surface**2 + y_pns_surface**2 + z_pns_surface**2))
+	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array))
 	fig = plot_3d_objects(data, 1)
+	fig.update_layout(uirevision=True)
 
 	return fig
 
