@@ -41,7 +41,7 @@ class goal_handler:
 		self.init_goal_handler()
 
 	def init_goal_handler(self):
-		self.goals_list = [self.gen_pose(0.5, 0.5, 0.5), self.gen_pose(0.5, -0.5, 0.5)]
+		self.goals_list = [self.gen_pose(0.25, 0.25, 0.25), self.gen_pose(0.25, -0.25, 0.25)]
 		self.current_goal_index = 0
 		self.init_goal_marker()
 

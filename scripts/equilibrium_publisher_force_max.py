@@ -248,7 +248,11 @@ class equilibrium_publisher:
 
 		# Calculate force vector
 		f_mag = np.linalg.norm(f_vec)
-		f_dir = f_vec / f_mag
+		try:
+			# if mag is 0, skip to avoid divide by zero
+			f_dir = f_vec / f_mag
+		except:
+			return
 
 		# v = d / dt
 		index_delay = 10

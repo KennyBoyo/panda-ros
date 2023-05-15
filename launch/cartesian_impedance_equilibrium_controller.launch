@@ -16,6 +16,7 @@
   <node name="equilibrium_publisher" pkg="panda_ros" type="equilibrium_publisher_force_max.py" output="screen" required="true" >
     <param name="link_name" value="panda_link0" />
   </node>
+  <node name="message_synchroniser" pkg="panda_ros" type="message_synchroniser.py" output="screen" required="true"/>
   <node name="painting" pkg="panda_ros" type="painting.py" output="screen" required="true"/>
   <node name="goal_handler" pkg="panda_ros" type="goal_handler.py" output="screen" required="true"/>
   <node name="analytics_ws" pkg="panda_ros" type="analytics_ws.py" output="screen" required="true"/>

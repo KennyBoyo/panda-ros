@@ -12,7 +12,7 @@ class MessageSynchroniserNode:
 	def __init__(self):
 		self.synced_msgs = rospy.Publisher("/os3/synchronised_step_problem", JointState, queue_size=5)
 
-		arm_state_topic = "/problem_topic_a"
+		arm_state_topic = "/problem_topic"
 		franka_state_topic = "/franka_state_controller/franka_states"
 
 		arm_state_sub = message_filters.Subscriber(arm_state_topic, JointState)
@@ -20,11 +20,11 @@ class MessageSynchroniserNode:
 
 		ts = message_filters.ApproximateTimeSynchronizer([arm_state_sub, franka_state_sub], 10, 0.1)
 		ts.registerCallback(self.callback)
-		print("registered callback")
+		print("registered synchroniser callback")
 		
 	def callback(self, arm_state: JointState, franka_state: FrankaState):
 		# The callback processing the pairs of numbers that arrived at approximately the same time
-		print("entering callback")
+		# print("entering callback")
 		sync: JointState = deepcopy(arm_state)
 		sync.header.stamp = franka_state.header.stamp
 		# sync.header.stamp = rospy.Time.now()
