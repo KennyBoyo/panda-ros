@@ -13,6 +13,7 @@ from sensor_msgs.msg import JointState
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
+from analytics_config import *
 
 def rot_mat(angle, dir):
 	if dir == 'x':
@@ -46,7 +47,7 @@ def gen_spherical(x, y, z, r, resolution=50):
 	Z = r * np.cos(v) + z
 	return (X, Y, Z)
 
-def plot_3d_objects(data, axes_size=100, axes=True):
+def plot_3d_objects(data, axes_size=100, axes=True, uirevision=True, width=600, height=600):
 	if axes:
 		data.append(go.Scatter3d(x = [0, axes_size], y = [0, 0], z = [0, 0], mode='lines', line = dict(color='red', width = 4)))
 		data.append(go.Scatter3d(x = [0, 0], y = [0, axes_size], z = [0, 0], mode='lines', line = dict(color='green', width = 4)))
@@ -71,6 +72,9 @@ def plot_3d_objects(data, axes_size=100, axes=True):
 			aspectmode = 'manual'
 		),
 	)
+	fig.update_layout(uirevision=uirevision)
+	fig.update_layout(width=width)
+	fig.update_layout(height=height)
 	return fig
 
 def shoulder2cartesian(angles, base=np.array([0, -1, 0])  ):
@@ -114,12 +118,7 @@ def gen_bins(low, high, res=100):
 	bins = np.linspace(low, high, res)
 	# Wrap low around to avoid indexing problem
 	bins = np.append(bins, [low])
-	return bins, borders
-
-# ====================================================================================================================
-# Constants
-# ====================================================================================================================
-coord_pipe = 'data/coord_pipe'
+	return bins, borders	
 
 # ====================================================================================================================
 # Webapp for displaying analytics
@@ -127,10 +126,17 @@ coord_pipe = 'data/coord_pipe'
 app = dash.Dash(__name__)
 app.layout = html.Div(
 	html.Div([
-		dcc.Graph(id='live-graph'),
+		dcc.Graph(id='collection_completeness', style={'display': 'inline-block'}),
+		dcc.Graph(id='live-graph', style={'display': 'inline-block'}),
+		dcc.Graph(id='live-ws', style={'display': 'inline-block'}),
 		dcc.Interval(
-			id='timer',
+			id='timer-fast',
 			interval=2*1000, # in milliseconds
+			n_intervals=0
+		),
+		dcc.Interval(
+			id='timer-slow',
+			interval=10*1000, # in milliseconds
 			n_intervals=0
 		)
 	])
@@ -138,15 +144,48 @@ app.layout = html.Div(
 
 # Multiple components can update everytime interval gets fired.
 @app.callback(Output('live-graph', 'figure'),
-			Input('timer', 'n_intervals'))
+			Input('timer-fast', 'n_intervals'))
 def update_graph_live(n):
+	# existing_shm = shared_memory.SharedMemory(name=shm_name)
+	with open(mag_pipe, 'rb') as f:
+		mag_array = np.loadtxt(f)
+
+	with open(count_pipe, 'rb') as f:
+		count_array = np.loadtxt(f)
+
+	
+	data = []
+	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, mag_array, plot_res)
+	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=x_pns_surface**2 + y_pns_surface**2 + z_pns_surface**2))
+	# data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array))
+	fig = plot_3d_objects(data, 1)
+	return fig
+
+# Multiple components can update everytime interval gets fired.
+@app.callback(Output('collection_completeness', 'figure'),
+			Input('timer-fast', 'n_intervals'))
+def update_graph_live(n):
+	with open(count_pipe, 'rb') as f:
+		count_array = np.loadtxt(f)
+
+	data = []
+	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, 0.75*np.ones((2*plot_res, plot_res)), plot_res)
+	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array, colorscale=[[0, "rgb(255, 0, 0)"],[1, "rgb(0, 255, 0)"]], cmin=0, cmax=30))
+	# data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array))
+	fig = plot_3d_objects(data, 1)
+	return fig
+
+# Multiple components can update everytime interval gets fired.
+@app.callback(Output('live-ws', 'figure'),
+			Input('timer-slow', 'n_intervals'))
+def update_graph_ws(n):
 	# existing_shm = shared_memory.SharedMemory(name=shm_name)
 	with open(coord_pipe, 'rb') as f:
 		coord_array = np.loadtxt(f)
 	
 	data = []
-	data.append(go.Mesh3d(x=coord_array[:, 0], y=coord_array[:, 1], z=coord_array[:, 2], alphahull=4, color='lightpink', opacity=0.50))
-	fig = plot_3d_objects(data, 1)
+	data.append(go.Mesh3d(x=coord_array[:, 0], y=coord_array[:, 1], z=coord_array[:, 2], alphahull=0.5, opacity=1))#, color='lightpink))
+	fig = plot_3d_objects(data, 2) 
 
 	return fig
 

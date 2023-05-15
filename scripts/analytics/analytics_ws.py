@@ -13,6 +13,7 @@ from sensor_msgs.msg import JointState
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
+from analytics_config import *
 
 def rot_mat(angle, dir):
 	if dir == 'x':
@@ -89,20 +90,6 @@ def cartesian2sphere(coords):
 
 	return theta, phi, mag
 
-# def cartesian2sphere(coords):
-# 	# Converts cartesian coodinates to spherical coordinates
-# 	print(coords)
-# 	x = coords[0]
-# 	y = coords[1]
-# 	z = coords[2]
-# 	xz = x**2 + z**2
-# 	mag = np.sqrt(xz + y**2)
-# 	theta = np.arctan2(z, x)
-# 	phi = np.arctan2(np.sqrt(xz), y)
-# 	print("tp:", theta, phi)
-
-# 	return theta, phi, mag
-
 def generate_data(n_points, seed=0):
 	return np.random.uniform(-np.pi, np.pi, (n_points, 3))
 
@@ -116,81 +103,60 @@ def gen_bins(low, high, res=100):
 	bins = np.append(bins, [low])
 	return bins, borders
 
-# ====================================================================================================================
-# Constants
-# ====================================================================================================================
-mag_pipe = 'data/mag_pipe'
-count_pipe = 'data/count_pipe'
-coord_pipe = 'data/coord_pipe'
+# res = 15
+# angles = generate_data(10000)
+# effort = generate_data(10000)
+# theta_bins, theta_borders = gen_bins(-np.pi, np.pi, 2*res)
+# phi_bins, phi_borders = gen_bins(0, np.pi, res)
+
+# indices, mags = parse_data(angles, effort, res)
+# r = np.random.uniform(0.25, 0.25, (2*res, res))
+
+# for i in range(len(indices)):
+# 	r[indices[i][0]-2, indices[i][1]-2] += mags[i]
+
+# data = []
+# (x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, r, res)
+# data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=x_pns_surface**2 + y_pns_surface**2 + z_pns_surface**2))
+# global_figure = plot_3d_objects(data, 75)
 
 # ====================================================================================================================
-# Constants
+# Ros Subscriber
 # ====================================================================================================================
+class AnalyticsNode:
+	def __init__(self):
+		self.sub = rospy.Subscriber("/os3/step_problem_solution", JointState, self.callback)
+		self.coord_array = np.empty((0,3), np.float64)
+		
+	def callback(self, js: JointState):
+		res = 15
+		# mag_array = np.append(an)
+		# angles = generate_data(10000)
+		# effort = generate_data(10000)
 
-mag_pipe = 'data/mag_pipe.txt'
-count_pipe = 'data/count_pipe.txt'
-coord_pipe = 'data/coord_pipe'
-plot_res = 15
-mag_array = 0.25*np.ones((2*plot_res, plot_res))
-count_array = np.ones((2*plot_res, plot_res))
+		angles = np.array([js.position])
+		print(self.coord_array.shape)
+		print(np.array([shoulder2cartesian(angles[0])]).shape)
 
-# ====================================================================================================================
-# Webapp for displaying analytics
-# ====================================================================================================================
-app = dash.Dash(__name__)
-app.layout = html.Div(
-	html.Div([
-		dcc.Graph(id='live-graph'),
-		# dcc.Graph(id='live-ws'),
-		dcc.Interval(
-			id='timer',
-			interval=2*1000, # in milliseconds
-			n_intervals=0
-		)
-	])
-)
+		self.coord_array = np.append(self.coord_array, np.array([shoulder2cartesian(angles[0])]), axis = 0)
+		print(self.coord_array)
 
-# Multiple components can update everytime interval gets fired.
-@app.callback(Output('live-graph', 'figure'),
-			Input('timer', 'n_intervals'))
-def update_graph_live(n):
-	# existing_shm = shared_memory.SharedMemory(name=shm_name)
-	with open(mag_pipe, 'rb') as f:
-		mag_array = np.loadtxt(f)
+		np.savetxt(coord_pipe, self.coord_array)
 
-	with open(count_pipe, 'rb') as f:
-		count_array = np.loadtxt(f)
 
-	
-	data = []
-	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, mag_array, plot_res)
-	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array, colorscale=[[0, "rgb(255, 0, 0)"],[1, "rgb(0, 255, 0)"]], cmin=0, cmax=101))
-	# data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array))
-	fig = plot_3d_objects(data, 1)
-	fig.update_layout(uirevision=True)
-	fig.update_layout(width=1000)
-	fig.update_layout(height=1000)
-	return fig
-
-# # Multiple components can update everytime interval gets fired.
-# @app.callback(Output('live-ws', 'figure'),
-# 			Input('timer', 'n_intervals'))
-# def update_graph_ws(n):
-# 	# existing_shm = shared_memory.SharedMemory(name=shm_name)
-# 	with open(coord_pipe, 'rb') as f:
-# 		coord_array = np.loadtxt(f)
-	
-# 	data = []
-# 	data.append(go.Mesh3d(x=coord_array[:, 0], y=coord_array[:, 1], z=coord_array[:, 2], alphahull=20, color='lightpink', opacity=0.50))
-# 	fig = plot_3d_objects(data, 1)
-
-# 	return fig
 
 # ====================================================================================================================
 # Main
 # ====================================================================================================================
 def main(args):
-	app.run_server(debug=True)
+	rospy.init_node("analytics_node", anonymous=True)
+	an = AnalyticsNode()
+	
+	try:
+		rospy.spin()
+	except KeyboardInterrupt:
+		print("Shutting down")
+
 
 if __name__ == '__main__':
 	main(sys.argv)

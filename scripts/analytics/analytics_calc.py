@@ -13,6 +13,7 @@ from sensor_msgs.msg import JointState
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
+from analytics_config import *
 
 def rot_mat(angle, dir):
 	if dir == 'x':
@@ -89,6 +90,20 @@ def cartesian2sphere(coords):
 
 	return theta, phi, mag
 
+# def cartesian2sphere(coords):
+# 	# Converts cartesian coodinates to spherical coordinates
+# 	print(coords)
+# 	x = coords[0]
+# 	y = coords[1]
+# 	z = coords[2]
+# 	xz = x**2 + z**2
+# 	mag = np.sqrt(xz + y**2)
+# 	theta = np.arctan2(z, x)
+# 	phi = np.arctan2(np.sqrt(xz), y)
+# 	print("tp:", theta, phi)
+
+# 	return theta, phi, mag
+
 def generate_data(n_points, seed=0):
 	return np.random.uniform(-np.pi, np.pi, (n_points, 3))
 
@@ -119,20 +134,12 @@ def gen_bins(low, high, res=100):
 # data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=x_pns_surface**2 + y_pns_surface**2 + z_pns_surface**2))
 # global_figure = plot_3d_objects(data, 75)
 
-
-# ====================================================================================================================
-# Constants
-# ====================================================================================================================
-coord_pipe = 'data/coord_pipe'
-
-
 # ====================================================================================================================
 # Ros Subscriber
 # ====================================================================================================================
 class AnalyticsNode:
 	def __init__(self):
 		self.sub = rospy.Subscriber("/os3/step_problem_solution", JointState, self.callback)
-		self.coord_array = np.empty((0,3), np.float64)
 		
 	def callback(self, js: JointState):
 		res = 15
@@ -140,15 +147,19 @@ class AnalyticsNode:
 		# angles = generate_data(10000)
 		# effort = generate_data(10000)
 
-		angles = np.array([js.position])
-		print(self.coord_array.shape)
-		print(np.array([shoulder2cartesian(angles[0])]).shape)
+		angles = np.array([js.position]) 
+		effort = np.array([js.effort])
 
-		self.coord_array = np.append(self.coord_array, np.array([shoulder2cartesian(angles[0])]), axis = 0)
-		print(self.coord_array)
+		indices, mags = parse_data(angles, effort, res)
 
-		np.savetxt(coord_pipe, self.coord_array)
-
+		for i in range(len(indices)):
+			curr_count = count_array[indices[i][0]-2, indices[i][1]-2]
+			curr_mag = mag_array[indices[i][0]-2, indices[i][1]-2]
+			mag_array[indices[i][0]-2, indices[i][1]-2] = (curr_mag * curr_count + mags[i]) / (curr_count + 1)
+			count_array[indices[i][0]-2, indices[i][1]-2] += 1
+			
+		np.savetxt(mag_pipe, mag_array)
+		np.savetxt(count_pipe, count_array)
 
 
 # ====================================================================================================================
