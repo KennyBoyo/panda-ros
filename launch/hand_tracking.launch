@@ -22,7 +22,7 @@
   <include file="$(find mrn_aruco)/launch/aruco_detect_kinect.launch" ></include>
   <!-- <include file="$(find mrn_kinect_bin)/launch/kinect_demo.launch" ></include> -->
 
-  <node name="mrn_openpose_demo" pkg="mrn_openpose" type="mrn_openpose_demo" args="/registered_097377233947/image_raw /undistorted_097377233947/image_raw 097377233947" />
+  <node name="mrn_openpose_demo" pkg="mrn_openpose" type="mrn_openpose_demo" args="/registered_226287140347/image_raw /undistorted_226287140347/image_raw 226287140347" />
   <!-- <node name="mrn_openpose_demo" pkg="mrn_openpose" type="mrn_openpose_demo" args="/registered_226287140347/image_raw /undistorted_226287140347/image_raw 226287140347" /> -->
   <!-- <include file="$(find mrn_kinect_bin)/launch/kinect_demo.launch" ></include> -->
 </launch>

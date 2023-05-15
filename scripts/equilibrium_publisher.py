@@ -4,8 +4,9 @@ import sys
 import tf2_ros
 import tf2_geometry_msgs.tf2_geometry_msgs
 import message_filters
-from std_msgs.msg import String, Int8, Float64
-from geometry_msgs.msg import PointStamped, PoseStamped, Point
+import numpy as np
+from std_msgs.msg import String, Int8
+from geometry_msgs.msg import PointStamped, PoseStamped, Point, WrenchStamped
 from dynamic_reconfigure.msg import Config, DoubleParameter, GroupState
 from std_msgs.msg import Int16MultiArray
 from franka_msgs.msg import FrankaState
@@ -17,207 +18,195 @@ import numpy as np
 
 class equilibrium_publisher:
 
-  def __init__(self):
-    self.sub = rospy.Subscriber("/franka_state_controller/franka_states", FrankaState, self.equilibrium_adjuster_callback)
-    self.pub = rospy.Publisher("/cartesian_impedance_equilibrium_controller/equilibrium_pose", PoseStamped, queue_size=10)
-    self.stiffness = rospy.Publisher("/cartesian_impedance_equilibrium_controller/equilibrium_stiffness", ImpedanceParams, queue_size=10)
-    self.imp = rospy.Subscriber("/cartesian_impedance_equilibrium_controller/impedance_mode", Int8, self.impedance_mode_callback)
-    # self.stiffness = rospy.Publisher("/cartesian_impedance_equilibrium_controllerdynamic_reconfigure_compliance_param_node/parameter_updates", Config, queue_size=10)
-    self.position_limits = [[-0.6, 0.6], [-0.6, 0.6], [0.05, 0.9]]
-    self.robot_pose_eq = PoseStamped()
-    self.robot_pose = PoseStamped()
-    self.index = 0
-    self.buffer_size = 20
-    self.k = 0
-    self.k_t = [0] * 3
+	def __init__(self):
+		self.sub = rospy.Subscriber("/franka_state_controller/franka_states", FrankaState, self.equilibrium_adjuster_callback)
+		self.pub = rospy.Publisher("/cartesian_impedance_equilibrium_controller/equilibrium_pose", PoseStamped, queue_size=10)
+		self.stiffness = rospy.Publisher("/cartesian_impedance_equilibrium_controller/equilibrium_stiffness", ImpedanceParams, queue_size=10)
+		self.imp = rospy.Subscriber("/cartesian_impedance_equilibrium_controller/impedance_mode", Int8, self.impedance_mode_callback)
+		self.force_sub = rospy.Subscriber("/franka_state_controller/F_ext", WrenchStamped, self.force_callback)
+		# self.force_pub = rospy.Publisher("/franka_state_controller/F_ext_mag", String, self.force_callback)
 
 
-    self.mag_thres_inc = 3
-    self.mag_thres_dec = 3
-
-    self.translation_lower_limit = 0
-    self.translation_upper_limit = 150
-    self.robot_pose_list = [None] * self.buffer_size  
-    self.robot_pose.header.frame_id = "panda_link0"
-
-    self.mode = 0
-
-
-  def equilibrium_adjuster_callback(self, actual: FrankaState):
-    self.robot_pose_list[self.index] = actual
-    self.index += 1
-    if (self.index == self.buffer_size):
-      self.index = 0
-    if self.robot_pose_list[self.index] != None:
-      actual = self.robot_pose_list[self.index]
-      self.robot_pose.header.stamp = rospy.Time.now()
-
-      # Convert robot end effector coordinates to quaternion
-      quat = tr.quaternion_from_matrix([[actual.O_T_EE[0], actual.O_T_EE[4], actual.O_T_EE[8], actual.O_T_EE[12]], \
-        [actual.O_T_EE[1], actual.O_T_EE[5], actual.O_T_EE[9], actual.O_T_EE[13]], \
-          [actual.O_T_EE[2], actual.O_T_EE[6], actual.O_T_EE[10], actual.O_T_EE[14]], \
-            [actual.O_T_EE[3], actual.O_T_EE[7], actual.O_T_EE[11], actual.O_T_EE[15]]])
-      # print(actual.dtheta)
-
-      # Set end effector robot position
-      self.robot_pose.pose.position.x = max([min([actual.O_T_EE[12],
-                                            self.position_limits[0][1]]),
-                                            self.position_limits[0][0]])
-      
-      self.robot_pose.pose.position.y = max([min([actual.O_T_EE[13],
-                                        self.position_limits[1][1]]),
-                                        self.position_limits[1][0]])
-      
-      self.robot_pose.pose.position.z = max([min([actual.O_T_EE[14],
-                                        self.position_limits[2][1]]),
-                                        self.position_limits[2][0]])
-      
-      # Set end effector orientation
-      self.robot_pose.pose.orientation.x = quat[0]
-      self.robot_pose.pose.orientation.y = quat[1]
-      self.robot_pose.pose.orientation.z = quat[2]
-      self.robot_pose.pose.orientation.w = quat[3]
+		# self.stiffness = rospy.Publisher("/cartesian_impedance_equilibrium_controllerdynamic_reconfigure_compliance_param_node/parameter_updates", Config, queue_size=10)
+		self.position_limits = [[-0.6, 0.6], [-0.6, 0.6], [0.05, 0.9]]
+		self.robot_pose_eq = PoseStamped()
+		self.robot_pose = PoseStamped()
+		self.index = 0
+		self.buffer_size = 20
+		self.k = 0
+		self.k_t = [0] * 3
 
 
-      
-      self.set_k(actual=actual)
-      
-      
+		self.mag_thres_inc = 3
+		self.mag_thres_dec = 3
 
-      # stiffness_config.doubles.append(DoubleParameter(name="rotational_stiffness", value=20))
-      # stiffness_config.doubles.append(DoubleParameter(name="nullspace_stiffness", value=10))
-      # stiffness_config.groups.append(GroupState(name="Default", state=True, id=0, parent=0))
-      # self.stiffness.publish(stiffness_config)
+		self.translation_lower_limit = 0
+		self.translation_upper_limit = 150
+		self.robot_pose_list = [None] * self.buffer_size
 
-      # stiffness_config = Config()
-      # stiffness_config.doubles.append(DoubleParameter(name="translational_stiffness", value=200))
-      # stiffness_config.doubles.append(DoubleParameter(name="rotational_stiffness", value=20))
-      # stiffness_config.doubles.append(DoubleParameter(name="nullspace_stiffness", value=10))
-      # stiffness_config.groups.append(GroupState(name="Default", state=True, id=0, parent=0))
-      # self.stiffness.publish(stiffness_config)
+		self.robot_pose.header.frame_id = "panda_link0"
 
-      # Publish pose
-      self.pub.publish(self.robot_pose)
+		self.mode = 0
+
+		self.wrench = WrenchStamped()
+		self.force_buffer_size = 10
+		self.force_buffer = [np.array([0, 0, 0])] * self.force_buffer_size
+		self.force_buffer_index = 0
 
 
-  def set_k(self, actual):
-    stiffness_config = ImpedanceParams()
-    stiffness_config.headers.stamp = rospy.Time.now()
-    index_delay = 1
-    magnitude = (20*((actual.O_T_EE[12] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[12])**2 + (actual.O_T_EE[13] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[13])**2 + (actual.O_T_EE[14] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[14])**2)**0.5)
-    magnitudes = ((30*((actual.O_T_EE[12] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[12])**2)**0.5), (30*((actual.O_T_EE[13] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[13])**2)**0.5), (30*((actual.O_T_EE[14] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[14])**2)**0.5))
-    # magnitude_y = (20*((actual.O_T_EE[13] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[13])**2)**0.5)
-    # magnitude_z = (20*((actual.O_T_EE[14] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[14])**2)**0.5)
-    # rospy.logdebug(magnitude, logger_name="abcd")
-    # # print(magnitude*100)
-    # print(((actual.O_T_EE[12] - self.robot_pose_list[(self.index-10) % 20].O_T_EE[12])**2 + (actual.O_T_EE[13] - self.robot_pose_list[(self.index-10) % 20].O_T_EE[13])**2 + (actual.O_T_EE[14] - self.robot_pose_list[(self.index-10) % 20].O_T_EE[14])**2)**0.5)
-    # magnitude -= 3
+
+	def equilibrium_adjuster_callback(self, actual: FrankaState):
+		self.robot_pose_list[self.index] = actual
+		self.index += 1
+		if (self.index == self.buffer_size):
+			self.index = 0
+		if self.robot_pose_list[self.index] != None:
+			actual = self.robot_pose_list[self.index]
+			self.robot_pose.header.stamp = rospy.Time.now()
+
+			# Convert robot end effector coordinates to quaternion
+			quat = tr.quaternion_from_matrix([[actual.O_T_EE[0], actual.O_T_EE[4], actual.O_T_EE[8], actual.O_T_EE[12]], \
+				[actual.O_T_EE[1], actual.O_T_EE[5], actual.O_T_EE[9], actual.O_T_EE[13]], \
+					[actual.O_T_EE[2], actual.O_T_EE[6], actual.O_T_EE[10], actual.O_T_EE[14]], \
+						[actual.O_T_EE[3], actual.O_T_EE[7], actual.O_T_EE[11], actual.O_T_EE[15]]])
+			# print(actual.dtheta)
+
+			# Set end effector robot position
+			self.robot_pose.pose.position.x = max([min([actual.O_T_EE[12],
+																						self.position_limits[0][1]]),
+																						self.position_limits[0][0]])
+
+			self.robot_pose.pose.position.y = max([min([actual.O_T_EE[13],
+																				self.position_limits[1][1]]),
+																				self.position_limits[1][0]])
+
+			self.robot_pose.pose.position.z = max([min([actual.O_T_EE[14],
+																				self.position_limits[2][1]]),
+																				self.position_limits[2][0]])
+
+			# Set end effector orientation
+			self.robot_pose.pose.orientation.x = quat[0]
+			self.robot_pose.pose.orientation.y = quat[1]
+			self.robot_pose.pose.orientation.z = quat[2]
+			self.robot_pose.pose.orientation.w = quat[3]
 
 
-    #SIGMOID
-    for i in range(len(magnitudes)):
-      if (magnitudes[i] < self.mag_thres_dec):
-        self.k_t[i] -= 1
-      elif (magnitudes[i] > self.mag_thres_inc):
-        self.k_t[i] += magnitudes[i]
 
-      if (self.k_t[i] < 0):
-          self.k_t[i] = 0
-
-    if (magnitude < self.mag_thres_dec):
-        self.k -= 1
-    elif (magnitude > self.mag_thres_inc):
-      self.k += magnitude
-
-    if (self.k < 0):
-        self.k = 0
-
-    # translational_stiffness = DoubleParameter(name="translational_stiffness", value=self.k)
-    # rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=self.k)
-    # nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=self.k)
-
-    translation_stiffness_labels = ["translational_stiffness_x", "translational_stiffness_y", "translational_stiffness_z"]
-
-    if (self.mode == 0):
-        stiffness_config.data.append(DoubleParameter(name="translational_stiffness", value=0))
-        rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=0)
-        nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=0)
-  
-    else:
-      for i in range(len(magnitudes)):
-        if (self.k_t[i] < self.translation_lower_limit):
-          stiffness_config.data.append(DoubleParameter(name=translation_stiffness_labels[i], value=0))
-        elif (self.k_t[i] > self.translation_upper_limit):
-          self.k_t[i] = self.translation_upper_limit
-          stiffness_config.data.append(DoubleParameter(name=translation_stiffness_labels[i], value=self.translation_upper_limit))
-        else:
-          stiffness_config.data.append(DoubleParameter(name=translation_stiffness_labels[i], value=self.k_t[i]))
+			self.set_k(actual=actual)
 
 
-      if (self.k < self.translation_lower_limit):
-        rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=0)
-        nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=0)
-      elif (self.k > self.translation_upper_limit):
-        self.k = self.translation_upper_limit
-        rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=self.translation_upper_limit/3)
-        nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=self.k/2)
-      else:
-        rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=self.k/3)
-        nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=self.k/2)
-      # for i in range(len(magnitudes)):
-      #   if (self.k_t[i] < self.translation_lower_limit):
-      #     stiffness_config.data.append(DoubleParameter(name=translation_stiffness_labels[i], value=0))
-      #   elif (self.k_t[i] > self.translation_upper_limit):
-      #     self.k_t[i] = self.translation_upper_limit
-      #     stiffness_config.data.append(DoubleParameter(name="translational_stiffness", value=self.translation_upper_limit))
-      #   else:
-      #     stiffness_config.data.append(DoubleParameter(name="translational_stiffness", value=self.k_t[i]))
+
+			# stiffness_config.doubles.append(DoubleParameter(name="rotational_stiffness", value=20))
+			# stiffness_config.doubles.append(DoubleParameter(name="nullspace_stiffness", value=10))
+			# stiffness_config.groups.append(GroupState(name="Default", state=True, id=0, parent=0))
+			# self.stiffness.publish(stiffness_config)
+
+			# stiffness_config = Config()
+			# stiffness_config.doubles.append(DoubleParameter(name="translational_stiffness", value=200))
+			# stiffness_config.doubles.append(DoubleParameter(name="rotational_stiffness", value=20))
+			# stiffness_config.doubles.append(DoubleParameter(name="nullspace_stiffness", value=10))
+			# stiffness_config.groups.append(GroupState(name="Default", state=True, id=0, parent=0))
+			# self.stiffness.publish(stiffness_config)
+
+			# Publish pose
+			self.pub.publish(self.robot_pose)
 
 
-      # if (self.k < self.translation_lower_limit):
-      #   stiffness_config.data.append(DoubleParameter(name="translational_stiffness", value=0))
-      #   rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=0)
-      #   nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=0)
-      # elif (self.k > self.translation_upper_limit):
-      #   self.k = self.translation_upper_limit
-      #   stiffness_config.data.append(DoubleParameter(name="translational_stiffness", value=self.translation_upper_limit))
-      #   rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=self.translation_upper_limit/3)
-      #   nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=self.k/2)
-      # else:
-      #   stiffness_config.data.append(DoubleParameter(name="translational_stiffness", value=self.k))
-      #   rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=self.k/3)
-      #   nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=self.k/2)
-    
-    
-    stiffness_config.data.append(rotational_stiffness)
-    stiffness_config.data.append(nullspace_stiffness)
-    # rospy.loginfo(self.mode)
+	def set_k(self, actual):
+		stiffness_config = ImpedanceParams()
+		stiffness_config.headers.stamp = rospy.Time.now()
+		index_delay = 1
+		magnitude = (20*((actual.O_T_EE[12] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[12])**2 + (actual.O_T_EE[13] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[13])**2 + (actual.O_T_EE[14] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[14])**2)**0.5)
+		magnitudes = ((30*((actual.O_T_EE[12] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[12])**2)**0.5), (30*((actual.O_T_EE[13] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[13])**2)**0.5), (30*((actual.O_T_EE[14] - self.robot_pose_list[(self.index-index_delay) % 20].O_T_EE[14])**2)**0.5))
 
-    stiffness_config.data.append(DoubleParameter(name="mode", value=self.mode))
+		#SIGMOID
+		for i in range(len(magnitudes)):
+			if (magnitudes[i] < self.mag_thres_dec):
+				self.k_t[i] -= 1
+			elif (magnitudes[i] > self.mag_thres_inc):
+				self.k_t[i] += magnitudes[i]
 
-    self.stiffness.publish(stiffness_config)
+			if (self.k_t[i] < 0):
+					self.k_t[i] = 0
+
+		if (magnitude < self.mag_thres_dec):
+				self.k -= 1
+		elif (magnitude > self.mag_thres_inc):
+			self.k += magnitude
+
+		if (self.k < 0):
+				self.k = 0
+
+		translation_stiffness_labels = ["translational_stiffness_x", "translational_stiffness_y", "translational_stiffness_z"]
+
+		if (self.mode == 0):
+				stiffness_config.data.append(DoubleParameter(name="translational_stiffness", value=0))
+				rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=0)
+				nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=0)
+
+		else:
+			for i in range(len(magnitudes)):
+				if (self.k_t[i] < self.translation_lower_limit):
+					stiffness_config.data.append(DoubleParameter(name=translation_stiffness_labels[i], value=0))
+				elif (self.k_t[i] > self.translation_upper_limit):
+					self.k_t[i] = self.translation_upper_limit
+					stiffness_config.data.append(DoubleParameter(name=translation_stiffness_labels[i], value=self.translation_upper_limit))
+				else:
+					stiffness_config.data.append(DoubleParameter(name=translation_stiffness_labels[i], value=self.k_t[i]))
 
 
-  def impedance_mode_callback(self, msg):
-    rospy.loginfo(self.mode)
-    self.mode = msg.data
+			if (self.k < self.translation_lower_limit):
+				rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=0)
+				nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=0)
+			elif (self.k > self.translation_upper_limit):
+				self.k = self.translation_upper_limit
+				rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=self.translation_upper_limit/3)
+				nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=self.k/2)
+			else:
+				rotational_stiffness = DoubleParameter(name="rotational_stiffness", value=self.k/3)
+				nullspace_stiffness = DoubleParameter(name="nullspace_stiffness", value=self.k/2)
 
+		stiffness_config.data.append(rotational_stiffness)
+		stiffness_config.data.append(nullspace_stiffness)
+
+		stiffness_config.data.append(DoubleParameter(name="mode", value=self.mode))
+
+		self.stiffness.publish(stiffness_config)
+
+	
+	def set_force_k(self):
+		stiffness_config = ImpedanceParams()
+		stiffness_config.headers.stamp = rospy.Time.now()
+		
+		force_mag = np.linalg.norm([self.wrench.force.x, self.wrench.force.y, self.wrench.force.z])
+		self.force_buffer[self.force_buffer_index] = self
+
+		
+
+	def impedance_mode_callback(self, msg):
+		rospy.loginfo(self.mode)
+		self.mode = msg.data
+
+	def force_callback(self, msg:WrenchStamped):
+		self.wrench = msg.wrench
+		mag = np.linalg.norm([msg.wrench.force.x, msg.wrench.force.y, msg.wrench.force.z])
+		print(mag)
 
 def main(args):
-  rospy.init_node('equilibrium_publisher', anonymous=True, log_level=rospy.DEBUG)
-  obc = equilibrium_publisher()
-  try:
-    rospy.spin()
-  except KeyboardInterrupt:
-    print("Shutting down")
+	rospy.init_node('equilibrium_publisher', anonymous=True, log_level=rospy.DEBUG)
+	obc = equilibrium_publisher()
+	try:
+		rospy.spin()
+	except KeyboardInterrupt:
+		print("Shutting down")
 
 if __name__ == '__main__':
-    main(sys.argv)
+		main(sys.argv)
 
 
-# header: 
+# header:
 #   seq: 22645
-#   stamp: 
+#   stamp:
 #     secs: 1678670276
 #     nsecs: 308802217
 #   frame_id: ''
@@ -266,7 +255,7 @@ if __name__ == '__main__':
 # time: 5268.55
 # control_command_success_rate: 0.99
 # robot_mode: 2
-# current_errors: 
+# current_errors:
 #   joint_position_limits_violation: False
 #   cartesian_position_limits_violation: False
 #   self_collision_avoidance_violation: False
@@ -308,7 +297,7 @@ if __name__ == '__main__':
 #   joint_via_motion_generator_planning_joint_limit_violation: False
 #   base_acceleration_initialization_timeout: False
 #   base_acceleration_invalid_reading: False
-# last_motion_errors: 
+# last_motion_errors:
 #   joint_position_limits_violation: False
 #   cartesian_position_limits_violation: False
 #   self_collision_avoidance_violation: False
@@ -352,9 +341,9 @@ if __name__ == '__main__':
 #   base_acceleration_invalid_reading: False
 
 
-# header: 
+# header:
 #   seq: 24791
-#   stamp: 
+#   stamp:
 #     secs: 1678670349
 #     nsecs: 299793149
 #   frame_id: ''
@@ -403,7 +392,7 @@ if __name__ == '__main__':
 # time: 5341.542
 # control_command_success_rate: 0.99
 # robot_mode: 2
-# current_errors: 
+# current_errors:
 #   joint_position_limits_violation: False
 #   cartesian_position_limits_violation: False
 #   self_collision_avoidance_violation: False
@@ -445,7 +434,7 @@ if __name__ == '__main__':
 #   joint_via_motion_generator_planning_joint_limit_violation: False
 #   base_acceleration_initialization_timeout: False
 #   base_acceleration_invalid_reading: False
-# last_motion_errors: 
+# last_motion_errors:
 #   joint_position_limits_violation: False
 #   cartesian_position_limits_violation: False
 #   self_collision_avoidance_violation: False

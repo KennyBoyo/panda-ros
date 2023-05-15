@@ -14,6 +14,7 @@
 #include <hardware_interface/joint_command_interface.h>
 #include <hardware_interface/robot_hw.h>
 #include <panda_ros/ImpedanceParams.h>
+#include <panda_ros/StiffnessConfig.h>
 #include <ros/node_handle.h>
 #include <ros/time.h>
 #include <Eigen/Dense>
@@ -66,7 +67,7 @@ class CartesianImpedanceEquilibriumController : public controller_interface::Mul
   void complianceParamCallback(franka_example_controllers::compliance_paramConfig& config,
                                uint32_t level);
   void equilibriumStiffnessCallback(
-                                const panda_ros::ImpedanceParams& config);
+                                const panda_ros::StiffnessConfig& config);
   void impedanceModeCallback(
                                 const std_msgs::Int8& config);
 
