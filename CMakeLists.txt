@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   hardware_interface
   std_msgs
+  nav_msgs
   tf
   tf_conversions
   message_generation
@@ -36,7 +37,11 @@ add_message_files(FILES
   Velocity.msg
 )
 
-generate_messages(DEPENDENCIES std_msgs dynamic_reconfigure)
+add_service_files(
+  FILES
+  TrainingTrajectory.srv
+)
+generate_messages(DEPENDENCIES std_msgs dynamic_reconfigure nav_msgs)
 
 generate_dynamic_reconfigure_options(
   cfg/compliance_param.cfg
@@ -54,6 +59,7 @@ catkin_package(
     franka_hw
     geometry_msgs
     std_msgs
+    nav_msgs
     hardware_interface
     tf
     tf_conversions

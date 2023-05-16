@@ -1,0 +1,16 @@
+- name: 'Start Capture'
+  service: 'trajectory_generation/start'
+  column: 0
+  service_type: 'Trigger'
+- name: 'Stop Capture'
+  service: 'trajectory_generation/stop'
+  column: 0
+  service_type: 'Trigger'
+- name: 'Add Spline Traj'
+  service: 'trajectory_generation/add_spline'
+  column: 1
+  service_type: 'Trigger'
+- name: 'CONFIRM Trajectories'
+  service: 'trajectory_generation/confirm'
+  column: 1
+  service_type: 'Trigger'
