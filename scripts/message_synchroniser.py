@@ -28,6 +28,7 @@ class MessageSynchroniserNode:
 		sync: JointState = deepcopy(arm_state)
 		sync.header.stamp = franka_state.header.stamp
 		# sync.header.stamp = rospy.Time.now()
+		sync.velocity = franka_state.O_T_EE[12:15]
 		sync.effort = franka_state.O_F_ext_hat_K
 		self.synced_msgs.publish(sync)
 

@@ -73,7 +73,7 @@ class equilibrium_publisher:
 
 		# This is the initial stiffness matrix. Be carful with changing this, 
 		# since a non-positive definite matrix will cause instability and the robot will break.
-		self.stiff_init_max = 200
+		self.stiff_init_max = 150
 		self.stiff_init_min = 50
 		self.max = np.array([self.stiff_init_max, self.stiff_init_min, self.stiff_init_min, 
 		       self.stiff_init_min, self.stiff_init_max, self.stiff_init_min, 
