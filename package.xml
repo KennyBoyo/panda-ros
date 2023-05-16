@@ -29,6 +29,7 @@
   <depend>franka_hw</depend>
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>nav_msgs</depend>
   <depend>hardware_interface</depend>
   <depend>tf</depend>
   <depend>tf_conversions</depend>
