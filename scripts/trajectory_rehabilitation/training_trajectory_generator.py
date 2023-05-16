@@ -13,7 +13,7 @@ from std_srvs.srv import Trigger, TriggerResponse
 from panda_ros.srv import *
 
 PARENT_FRAME = 'panda_link0'
-
+p0 = np.asarray([ 0.4, -0.2,  0.3])
 
 class TrainingTrajectoryHandler():
 	def __init__(self, state_topic, d_min):
@@ -25,7 +25,7 @@ class TrainingTrajectoryHandler():
 		self.pbServices = [
             rospy.Service('trajectory_generation/start', Trigger, self.pb_start_handler),
             rospy.Service('trajectory_generation/stop', Trigger, self.pb_stop_handler),
-            rospy.Service('trajectory_generation/add_spline', Trigger, lambda req :rospy.logwarn("Not implemented :)")),
+            rospy.Service('trajectory_generation/add_default_path', Trigger, self.pb_add_default_handler),
             rospy.Service('trajectory_generation/confirm', Trigger, self.pb_confirm_handler),
         ]
 
@@ -35,6 +35,7 @@ class TrainingTrajectoryHandler():
 		self.pbStates = {
 			'record' : False,
 			'spline' : False,
+			'add_default' : False, 
 			'confirm': False
 		}
 
@@ -52,14 +53,20 @@ class TrainingTrajectoryHandler():
 	def pb_confirm_handler(self, req):
 		self.pbStates['confirm'] = True
 		return TriggerResponse(success=True)
+	def pb_add_default_handler(self, req):
+		self.pbStates['add_default'] = True
+		return TriggerResponse(success=True)
 
 	def franka_callback(self, msg: FrankaState):
+		T_current = msg.O_T_EE
+		p_current = np.array([T_current[12], T_current[13], T_current[14]])
 
 		if self.pbStates['confirm']:
 
 			if self.isRecording:
 				rospy.logwarn("Stop Recording before confirming trajectories")
-
+			elif len(self.trajectories) == 0:
+				rospy.logwarn("No trajectories planned. :(")
 			else:		
 				if not self.confirmFlag:
 					rospy.loginfo(f"There are {len(self.trajectories)} recorded trajectories. Press again to end session.")
@@ -68,31 +75,34 @@ class TrainingTrajectoryHandler():
 				else:
 					self.launch_server()
 					
-
 		if self.pbStates['record']:
 			self.confirmFlag = False
-			T_current = msg.O_T_EE
-			p_current = np.array([T_current[12], T_current[13], T_current[14]])
 			currentPose = se3_to_PoseStamped(T_current, PARENT_FRAME) 
 
 			# First frame in path
 			if self.isRecording == False:
-				rospy.loginfo(f"Trajectory {len(self.trajectories)} recording begun.")
+				rospy.loginfo(f"Starting Trajectory no.{len(self.trajectories)} recording.")
 				self.pathMsg.poses.clear()
 				self.pathMsg.poses.append(currentPose)
 				self.isRecording = True
 
 			elif np.linalg.norm(p_current - self.prev_pos) > self.dist_min: 
-				if len(self.pathMsg.poses)%10 == 0:
-					rospy.loginfo(f"Still recording Trajectory {len(self.trajectories)}")
+				path_len = len(self.pathMsg.poses)
+				if path_len%10 == 0:
+					rospy.loginfo(f"Recording Trajectory {len(self.trajectories)}: {path_len} points.")
 				self.pathMsg.poses.append(currentPose)
 				self.prev_pos = p_current
 
+		elif self.pbStates['add_default']:
+			def_traj = parameterised_trajectory(p0, 30)
+			self.publish_trajectory(def_traj)
+			self.trajectories.append(def_traj)
 
+			rospy.loginfo(f"Added default trajectory as no{len(self.trajectories)}.")
+			self.pbStates['add_default'] = False
 
 		if self.isRecording == True and self.pbStates['record'] == False:
-			rospy.loginfo(f"Stopping trajectory recording {len(self.trajectories)}")
-			print(len(self.pathMsg.poses))
+			rospy.loginfo(f"Stopped trajectory recording no.{len(self.trajectories)}.")
 			self.isRecording = False
 			self.pathMsg.header.stamp = rospy.Time.now()
 			self.publish_trajectory(self.pathMsg)
@@ -104,10 +114,10 @@ class TrainingTrajectoryHandler():
 	def launch_server(self):
 		# Disable current subscribers etc
 
-		rospy.logwarn(f"Closing handler with {len(self.trajectories)}.")
+		rospy.logwarn(f"Closing handler with {len(self.trajectories)} trajectory(ies).")
 		self.sub.unregister()
 		for service in self.pbServices:
-			service.shutdown("Closing service")
+			service.shutdown("Closing pb services")
 
 		# Launch server node with trajectories
 		self.trajectory_server = TrajectoryServer(self.trajectories, PARENT_FRAME)
@@ -136,17 +146,34 @@ class TrajectoryServer():
 	def shutdown_callback(self):
 		self.server.shutdown()
 		 
-# def trajectory_generator(p0, n):
-# 	traj_position = np.zeros((n, 3))
-# 	traj_position[:, 2] = p0[2]
+def parameterised_trajectory(p0, n):
+	traj_position = np.zeros((n, 3))
+	traj_position[:, 2] = p0[2]
 
-# 	# n_step = np.linspace(0, 0.1*np.pi, n)
-# 	# traj_position[:, 0] = x0 + n_step
-# 	# traj_position[:, 1] = 0.1*np.sin(10*n_step) + y0
-# 	traj_position[:, 0] = p0[0]
-# 	traj_position[:, 1] = p0[1] + np.linspace(0, 0.5, n)
+	# n_step = np.linspace(0, 0.1*np.pi, n)
+	# traj_position[:, 0] = x0 + n_step
+	# traj_position[:, 1] = 0.1*np.sin(10*n_step) + y0
+	traj_position[:, 0] = p0[0]
+	traj_position[:, 1] = p0[1] + np.linspace(0, 0.5, n)
 
-# 	return traj_position
+	# Create nav_msgs/Path
+	t = rospy.Time.now()
+	pathMsg = Path()
+	pathMsg.header.stamp = t
+	pathMsg.header.frame_id = PARENT_FRAME
+
+	poseMsg = PoseStamped()
+	poseMsg.header.stamp = t
+	poseMsg.header.frame_id = PARENT_FRAME
+
+	for coord in traj_position:
+		new_pose = deepcopy(poseMsg)
+		new_pose.pose.position.x = coord[0]
+		new_pose.pose.position.y = coord[1]
+		new_pose.pose.position.z = coord[2]
+		pathMsg.poses.append(new_pose)
+
+	return pathMsg
 
 # def spline_trajectory_generator(p0, degree, n):
 # 	cv = [[0,0,0],

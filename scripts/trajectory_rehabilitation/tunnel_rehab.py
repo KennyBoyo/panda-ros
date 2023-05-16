@@ -8,30 +8,51 @@ from franka_msgs.msg import FrankaState
 from nav_msgs.msg import Path
 from panda_ros.msg import StiffnessConfig
 from geometry_msgs.msg import PoseStamped, Vector3
+from std_srvs.srv import Trigger, TriggerResponse, SetBoolResponse, SetBool, SetBoolRequest
 from panda_ros.srv import *
+from visualization_msgs.msg import Marker
 from msg_utils import *
+
 PARENT_FRAME = "panda_link0"
+
 # Honing Parameters
 hone_dist = 50e-3 # m
+
 # Constants
 K_default =  np.diag([1,1,1,0,0,0])
 MIN_IDX = 0
 MAX_IDX = 1
+
 # States
+STARTING_STATE = -1
 IDLE_STATE = 0
 NEW_TRAJECTORY_STATE = 1
 HONING_STATE = 2
 EXECUTE_STATE = 3
 
+# Assistance Types:
+NO_ASSIST = 0
+DISTANCE_ASSIST = 1
+TUNNEL_ASSIST = 2
 
 class TunnelTrajectoryController():
     def __init__ (self, tunnel_radius: np.double, k_min, k_max):
         self.tunnel_radius = tunnel_radius
         self.stiffness_limits = (k_min, k_max)
-        self.currentState = IDLE_STATE
+        self.currentState = STARTING_STATE
         self.pn_idx = 0
         self.f_fault_tolerance_stiffness = lambda d : k_min + ((k_max - k_min)/tunnel_radius)*(d-tunnel_radius)
+        self.setup_marker_message()
 
+        self.pbServices = [rospy.Service('assistive_controller/next_trajectory', Trigger, self.pb_next_trajectory_handler),
+                           rospy.Service('assistive_controller/assistance_flag', SetBool, self.pbs_assistance_flag_handler),
+                           rospy.Service('assistive_controller/assistance_type', SetBool, self.pbs_assistance_type_handler)]
+        self.assistanceMode = TUNNEL_ASSIST
+        # Assistance_flag(0th element) - ON: Assistance mode enabled.
+        # Assistance_type(1st element) - OFF: Distance based, ON: Tunnel based.
+        self.pbAssistanceStates = [True, True]
+        self.pbNextTrajectoryState = False
+        
         # Wait for trajectory server    
         rospy.wait_for_service("/training_trajectory_server")
         # Incoming:
@@ -41,57 +62,116 @@ class TunnelTrajectoryController():
         self.pEqm_pub = rospy.Publisher("/cartesian_impedance_equilibrium_controller/equilibrium_pose", PoseStamped, queue_size=10)
         self.stiffnessParams_pub = rospy.Publisher("/cartesian_impedance_equilibrium_controller/stiffness_config", StiffnessConfig, queue_size=10)
         self.trajectory_pub = rospy.Publisher("/unity/desired_trajectory", Path, queue_size=10)
+        self.pHoning_pub = rospy.Publisher("assistive_controller/honing_position", Marker, queue_size=10)
+
+    def setup_marker_message(self):
+        self.marker = Marker()
+        self.marker.header.frame_id = PARENT_FRAME
+        self.marker.id = 0
+        self.marker.type = Marker().SPHERE
+        self.marker.action = Marker().MODIFY
+        self.marker.scale  = Vector3(0.05,0.05,0.05)
+        self.marker.color.b = 1
+        self.marker.color.a = 0.6
 
     def step(self, msg: FrankaState):
         state = self.currentState
         T_current = msg.O_T_EE
         p_current = np.array([T_current[12], T_current[13], T_current[14]])
 
-        if state == IDLE_STATE:
-            try:
-                req = self.trajectory_srv(PARENT_FRAME)
-                req: TrainingTrajectoryResponse
-                if req.trajectoryAvailable:
-                    self.trajectory_path = req.trajectory
-                    self.currentState = NEW_TRAJECTORY_STATE
+        # Handle pb states
+        if self.pbNextTrajectoryState:
+            self.pbNextTrajectoryState = False
 
-            except rospy.ServiceException as e:
-                rospy.logerr("Service call failed: %s"%e)
+            # Reset to IDLE state (Remove path?)
+            self.currentState = IDLE_STATE
 
-        else:
 
-            if state != EXECUTE_STATE:
+        if state != EXECUTE_STATE:
+            # Null stiffness matrix for transparency
+            desired_stiffness = K_default * 0
+            desired_pose = PoseStamped()
+            desired_pose.header.stamp = rospy.Time.now()
+            desired_pose.header.frame_id = PARENT_FRAME
 
-                if state == NEW_TRAJECTORY_STATE:
+            if state == IDLE_STATE:
+                try:
+                    req = self.trajectory_srv(PARENT_FRAME)
+                    req: TrainingTrajectoryResponse
+                    if req.trajectoryAvailable:
+                        rospy.loginfo("New Trajectory Received.")
+                        self.trajectory_path = req.trajectory
+                        self.currentState = NEW_TRAJECTORY_STATE
+                    else:
+                        rospy.logwarn_once("New Trajectory Unavailable.")
+
+                except rospy.ServiceException as e:
+                    rospy.logerr("Service call failed: %s"%e)
+
+            elif  state == NEW_TRAJECTORY_STATE:
                     self.initialise_new_trajectory()
                     self.currentState = HONING_STATE
                     
-                elif state == HONING_STATE:
-                    d = np.linalg.norm(p_current - self.trajectory_positions[0])
-                    rospy.logwarn_throttle(2 ,f"Please hone to the start: {d*1e3} millimeters away. Control pose of EFF.")
-                    if d < hone_dist:
-                        rospy.loginfo("EFF honed. Starting assistive rehabilitation.")
-                        self.currentState = EXECUTE_STATE
-                        self.trajectory_path.header.stamp = rospy.Time.now()
-                        self.trajectory_pub.publish(self.trajectory_path)
+            elif state == HONING_STATE:
+                p_delta = np.linalg.norm(p_current - self.trajectory_positions[0])
+                # desired_stiffness = K_default * self.stiffness_limits[MIN_IDX]
+                rospy.logwarn_throttle(2 ,f"Please hone EFF: {p_delta*1e3} millimeters away. Control pose of EFF.")
                 
-                # Null stiffness matrix for transparency
-                stiffness_mat = K_default * 0
-                min_idx = 0
+                if p_delta < hone_dist:
+                    mode_repr = self.get_assistance_mode()
+                    rospy.loginfo(f"EFF honed. Starting assistive rehabilitation in {mode_repr} mode.")
+                    self.currentState = EXECUTE_STATE
 
+                    # Publish desired trajectory once.
+                    self.trajectory_path.header.stamp = rospy.Time.now()
+                    self.trajectory_pub.publish(self.trajectory_path)
+            
+        else:
+            
+            # Do necessary calculations 
+            min_idx, p_min, d_min = self.nearest_point_on_trajectory(p_current, 5)
+
+            # Get desired stiffness based on assitance mode. 
+            if self.assistanceMode == DISTANCE_ASSIST:
+                desired_stiffness, p_reference = self.get_distance_model_update_parameters(d_min, p_min, p_current)    
+            elif self.assistanceMode == TUNNEL_ASSIST:
+                desired_stiffness, p_reference = self.get_tolerance_tunnel_model_update_paramaters(d_min, p_min, p_current)
             else:
-                # Do necessary calculations 
-                min_idx, p_min, d_min = self.nearest_point_on_trajectory(p_current, 5)
-                stiffness_mat, p_reference = self.get_tolerance_tunnel_model_update_paramaters(d_min, p_min, p_current)
-                
-                # Publish nearest point for visualisation (RVIZ)
-                self.visualise_nearest_trajectory_point(p_reference, T_current)
+                desired_stiffness = K_default * 0
+                p_reference = p_min
 
-            # Publish updated parameters
-            self.publish_update_parameters(self.trajectory_path.poses[min_idx], stiffness_mat)
+            desired_pose = self.trajectory_path.poses[min_idx]
+            # Publish nearest point for visualisation (RVIZ)
+            self.visualise_nearest_trajectory_point(p_reference, T_current)
 
+        # Publish updated parameters
+        self.publish_update_parameters(desired_pose, desired_stiffness)
 
+    def pb_next_trajectory_handler(self, req):
+        self.pbNextTrajectoryState = True
+        return TriggerResponse(success=True)
+    def pbs_assistance_flag_handler(self, req: SetBoolRequest):
+        self.pbAssistanceStates[0] = req.data
+        return SetBoolResponse(success=True)
+    def pbs_assistance_type_handler(self, req: SetBoolRequest):
+        self.pbAssistanceStates[1] = req.data
+        return SetBoolResponse(success=True)
+    
+    def get_assistance_mode(self):
+        self.assistanceMode = NO_ASSIST
+        mode_repr = "NO_ASSIST"
+        if self.pbAssistanceStates[0]:
 
+            if self.pbAssistanceStates[1]:
+                self.assistanceMode = TUNNEL_ASSIST
+                mode_repr = "TUNNEL_ASSIST"
+            
+            else:
+                self.assistanceMode = DISTANCE_ASSIST
+                mode_repr = "DISTANCE_ASSIST"
+
+        return mode_repr
+    
     def initialise_new_trajectory(self):
         self.trajectory_path: Path
 
@@ -108,6 +188,10 @@ class TunnelTrajectoryController():
         honePose.poses = honePose.poses[:1]
         honePose.header.stamp = rospy.Time.now()
         self.trajectory_pub.publish(honePose)
+        
+        self.marker.pose = honePose.poses[0].pose
+        self.marker.header.stamp = rospy.Time.now()
+        self.pHoning_pub.publish(self.marker)
 
     def nearest_point_on_trajectory(self, pos: np.array, vicinity_idx: int):
         prev_idx = self.pn_idx 
@@ -185,5 +269,5 @@ class TunnelTrajectoryController():
 
 if __name__ == "__main__":
     rospy.init_node("assistive_rehab")
-    ctrl = TunnelTrajectoryController(tunnel_radius=0.02, k_min=100, k_max = 500)
+    ctrl = TunnelTrajectoryController(tunnel_radius=0.02, k_min=100, k_max = 300)
     rospy.spin()

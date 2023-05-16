@@ -1,0 +1,14 @@
+- name: 'Next Training Trajectory'
+  service: 'assistive_controller/next_trajectory'
+  column: 0
+  service_type: 'Trigger'
+- name: '(Master) Selected: Assistance mode enabled'
+  service: 'assistive_controller/assistance_flag'
+  column: 0
+  service_type: 'SetBool'
+  default_value: true
+- name: '(Slave) Selected: Tunnel, else: Distance'
+  service: 'assistive_controller/assistance_type'
+  column: 0
+  service_type: 'SetBool'
+  default_value: true

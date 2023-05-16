@@ -12,13 +12,16 @@
   <rosparam command="load" file="$(find panda_ros)/config/franka_panda_controller_swc.yaml" />
   <rosparam command="load" file="$(find franka_panda_controller_swc)/config/franka_panda_controller_swc.yaml" />
   <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="cartesian_impedance_equilibrium_controller"/>
-  <node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find panda_ros)/launch/rviz/franka_description_with_tunnel.rviz"/>
-  <node name="assistance_tunnel" pkg="panda_ros" type="old_tunnel.py" required="true" output="screen">
+  <node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find panda_ros)/launch/rviz/franka_description_with_trajectory_tunnel.rviz"/>
+  <!-- <node name="assistance_tunnel" pkg="panda_ros" type="old_tunnel.py" required="true" output="screen">
     <param name="link_name" value="panda_link0" />
-  </node>
+  </node> -->
+
   <!-- <node name="interactive_marker" pkg="franka_example_controllers" type="interactive_marker.py" required="true" output="screen">
     <param name="link_name" value="panda_link0" />
     <remap from="equilibrium_pose" to="/cartesian_impedance_example_controller/equilibrium_pose" />
   </node> -->
   <!-- <node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" required="false" /> -->
 </launch>
+
+
