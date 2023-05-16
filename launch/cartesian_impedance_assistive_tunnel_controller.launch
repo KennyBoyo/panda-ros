@@ -13,7 +13,7 @@
   <rosparam command="load" file="$(find franka_panda_controller_swc)/config/franka_panda_controller_swc.yaml" />
   <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="cartesian_impedance_equilibrium_controller"/>
   <node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find panda_ros)/launch/rviz/franka_description_with_tunnel.rviz"/>
-  <node name="assistance_tunnel" pkg="panda_ros" type="assistive_tunnel.py" required="true" output="screen">
+  <node name="assistance_tunnel" pkg="panda_ros" type="old_tunnel.py" required="true" output="screen">
     <param name="link_name" value="panda_link0" />
   </node>
   <!-- <node name="interactive_marker" pkg="franka_example_controllers" type="interactive_marker.py" required="true" output="screen">

@@ -8,9 +8,17 @@
   service_type: 'Trigger'
 - name: 'Add Spline Traj'
   service: 'trajectory_generation/add_spline'
-  column: 1
+  column: 0
   service_type: 'Trigger'
 - name: 'CONFIRM Trajectories'
+  service: 'trajectory_generation/confirm'
+  column: 0
+  service_type: 'Trigger'
+- name: 'Next Training Trajectory'
+  service: 'assistive_controller/confirm'
+  column: 1
+  service_type: 'Trigger'
+- name: ''
   service: 'trajectory_generation/confirm'
   column: 1
   service_type: 'Trigger'
