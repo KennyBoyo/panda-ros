@@ -1,11 +1,16 @@
 <launch>
-
+  <arg name="record_bag" default="false"/>
   <node name="training_controller" pkg="panda_ros" type="tunnel_rehab.py"
-        output="screen"/>
+        output="screen">
+    <param name="record_bag" value = "($arg record_bag)"/>
+  </node>
 
   <node name="$(anon sample_buttons)"
         pkg="jsk_rqt_plugins" type="rqt_service_buttons" output="screen" clear_params="true">
     <param name="~layout_yaml_file" value="package://panda_ros/resources/training_controller_layout.yaml" />
   </node>
-  
+
+  <node pkg="rosbag" type="record" name="training_rosbag" if="$(arg record_bag)"
+    args="record -o /home/medrobotics/Documents/ShankerThesis/rosbags/assistance /unity/desired_trajectory assistive_controller/status"/>
+
 </launch>

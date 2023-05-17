@@ -35,13 +35,14 @@ add_message_files(FILES
   UnityInput.msg
   Vector3.msg
   Velocity.msg
+  TrainingStatus.msg
 )
 
 add_service_files(
   FILES
   TrainingTrajectory.srv
 )
-generate_messages(DEPENDENCIES std_msgs dynamic_reconfigure nav_msgs)
+generate_messages(DEPENDENCIES std_msgs dynamic_reconfigure nav_msgs geometry_msgs)
 
 generate_dynamic_reconfigure_options(
   cfg/compliance_param.cfg
@@ -60,6 +61,7 @@ catkin_package(
     geometry_msgs
     std_msgs
     nav_msgs
+    geometry_msgs
     hardware_interface
     tf
     tf_conversions

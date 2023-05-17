@@ -6,7 +6,7 @@
   service: 'trajectory_generation/stop'
   column: 0
   service_type: 'Trigger'
-- name: 'Add Spline Traj'
+- name: 'Default Traj'
   service: 'trajectory_generation/add_default_path'
   column: 0
   service_type: 'Trigger'

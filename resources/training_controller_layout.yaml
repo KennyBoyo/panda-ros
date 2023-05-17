@@ -1,6 +1,10 @@
 - name: 'Next Training Trajectory'
   service: 'assistive_controller/next_trajectory'
-  column: 0
+  column: 1
+  service_type: 'Trigger'
+- name: 'Reset Trajectory'
+  service: 'assistive_controller/reset_trajectory'
+  column: 1
   service_type: 'Trigger'
 - name: '(Master) Selected: Assistance mode enabled'
   service: 'assistive_controller/assistance_flag'

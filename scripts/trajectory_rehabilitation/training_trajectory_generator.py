@@ -14,12 +14,13 @@ from panda_ros.srv import *
 
 PARENT_FRAME = 'panda_link0'
 p0 = np.asarray([ 0.4, -0.2,  0.3])
+spline_default = [[0.3, 0, 0.3], [0.35, -0.1, 0.7], [0.6, 0.35, 0.25]]
 
 class TrainingTrajectoryHandler():
 	def __init__(self, state_topic, d_min):
 		self.sub = rospy.Subscriber(state_topic,FrankaState, self.franka_callback)
 		self.dist_min = d_min
-		self.trajectory_publisher = rospy.Publisher("/unity/pathme", Path, queue_size=100)
+		self.trajectory_publisher = rospy.Publisher("/trajectory_generation/trajectory", Path, queue_size=100)
 
 
 		self.pbServices = [
@@ -94,7 +95,8 @@ class TrainingTrajectoryHandler():
 				self.prev_pos = p_current
 
 		elif self.pbStates['add_default']:
-			def_traj = parameterised_trajectory(p0, 30)
+			# def_traj = parameterised_trajectory(p0, 30)
+			def_traj = spline_trajectory_generator(spline_default, 7, 50)
 			self.publish_trajectory(def_traj)
 			self.trajectories.append(def_traj)
 
@@ -138,8 +140,8 @@ class TrajectoryServer():
 		if req.base_frame == self.frame_id:
 			if len(self.trajectories):
 				response.trajectoryAvailable = True
-				response.trajectory = self.trajectories[0]
-				print(type(self.trajectories[0]))
+				response.trajectory = self.trajectories.pop(0)
+				# print(type(self.trajectories[0]))
 				rospy.loginfo("Trajectory response with valid trajectory sent.")
 
 		return response
@@ -156,6 +158,11 @@ def parameterised_trajectory(p0, n):
 	traj_position[:, 0] = p0[0]
 	traj_position[:, 1] = p0[1] + np.linspace(0, 0.5, n)
 
+	pathMsg = trajectory_to_Path(traj_position)
+	return pathMsg
+
+def trajectory_to_Path(trajectory):
+
 	# Create nav_msgs/Path
 	t = rospy.Time.now()
 	pathMsg = Path()
@@ -166,36 +173,31 @@ def parameterised_trajectory(p0, n):
 	poseMsg.header.stamp = t
 	poseMsg.header.frame_id = PARENT_FRAME
 
-	for coord in traj_position:
+	for coord in trajectory:
 		new_pose = deepcopy(poseMsg)
 		new_pose.pose.position.x = coord[0]
 		new_pose.pose.position.y = coord[1]
 		new_pose.pose.position.z = coord[2]
 		pathMsg.poses.append(new_pose)
-
+	
 	return pathMsg
 
-# def spline_trajectory_generator(p0, degree, n):
-# 	cv = [[0,0,0],
-# 	   		[0.1, 0.1, 0.1],
-# 			[0.2, 0.2, 0.3],
-# 			[0.5, -0.2, 0.2],
-# 			[0.7, 0.2, -0.1]]
-# 	cv = np.asarray(cv)
-# 	cv += p0
-# 	count = cv.shape[0]
+def spline_trajectory_generator(cv, degree, n):
+	cv = np.asarray(cv)
+	count = cv.shape[0]
 
-# 	degree = np.clip(degree, 1, count - 1)
-# 	kv = np.clip(np.arange(count + degree + 1) - degree, 0, count - degree)
+	degree = np.clip(degree, 1, count - 1)
+	kv = np.clip(np.arange(count + degree + 1) - degree, 0, count - degree)
 
-# 	# Return samples
-# 	max_param = count - degree
-# 	spl = scipolate.BSpline(kv, cv, degree)
+	# Return samples
+	max_param = count - degree
+	spl = scipolate.BSpline(kv, cv, degree)
 
-# 	spline_trajectory = spl(np.linspace(0,max_param,n))
+	spline_trajectory = spl(np.linspace(0,max_param,n))
 	
-# 	return spline_trajectory
-
+	pathMsg = trajectory_to_Path(spline_trajectory)
+	
+	return pathMsg
 
 
 if __name__ == "__main__":
