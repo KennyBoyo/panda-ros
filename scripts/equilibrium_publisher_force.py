@@ -36,7 +36,7 @@ class equilibrium_publisher:
 	def __init__(self):
 		self.sub = rospy.Subscriber("/franka_state_controller/franka_states", FrankaState, self.equilibrium_adjuster_callback)
 		self.pub = rospy.Publisher("/cartesian_impedance_equilibrium_controller/equilibrium_pose", PoseStamped, queue_size=5)
-		self.stiffness = rospy.Publisher("/cartesian_impedance_equilibrium_controller/equilibrium_stiffness", StiffnessConfig
+		self.stiffness = rospy.Publisher("/cartesian_impedance_equilibrium_controller/stiffness_config", StiffnessConfig
 		, queue_size=5)
 		self.imp = rospy.Subscriber("/cartesian_impedance_equilibrium_controller/impedance_mode", Int8, self.impedance_mode_callback)
 
@@ -119,7 +119,10 @@ class equilibrium_publisher:
 
 			# Publish Stiffnesses
 			# self.set_k(actual=actual)
-			self.set_force_k(actual)
+			if self.mode == 1:
+				self.set_k(actual)
+			elif self.mode == 2:
+				self.set_force_k(actual)
 
 			# Publish pose
 
@@ -213,7 +216,7 @@ class equilibrium_publisher:
 
 		# Assign Translational Stiffnesses
 		translation_stiffness = np.zeros((3, 3))
-		if (self.mode != 0):
+		if (self.mode == 1):
 			for i in range(len(magnitudes)):
 				if (self.k_t[i] < self.translation_lower_limit):
 					translation_stiffness[i, i] = 0
@@ -222,9 +225,6 @@ class equilibrium_publisher:
 					translation_stiffness[i, i] = self.translation_upper_limit
 				else:
 					translation_stiffness[i, i] = self.k_t[i]
-
-		for i in range(3):
-			translation_stiffness[i, i]  = stiffness_config.data.append()
 
 		stiffness_config.force = translation_stiffness.reshape(-1)
 		self.stiffness.publish(stiffness_config)
