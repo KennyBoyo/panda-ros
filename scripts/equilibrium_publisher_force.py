@@ -227,6 +227,7 @@ class equilibrium_publisher:
 					translation_stiffness[i, i] = self.k_t[i]
 
 		stiffness_config.force = translation_stiffness.reshape(-1)
+		stiffness_config.torque = 30 * np.eye(3).reshape(-1)
 		self.stiffness.publish(stiffness_config)
 
 	
@@ -270,6 +271,8 @@ class equilibrium_publisher:
 		stiffness_config.torque = t_mat
 		stiffness_config.force_mag = f_mag
 		stiffness_config.torque_mag = t_mag
+		
+		stiffness_config.torque = 30 * np.eye(3).reshape(-1)
 
 		self.force_stiff.publish(stiffness_config)
 

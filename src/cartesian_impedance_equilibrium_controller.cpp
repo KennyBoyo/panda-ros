@@ -276,9 +276,9 @@ void CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback(
     cartesian_stiffness_target_.topLeftCorner(3, 3)
         << stiffness_tl;
     cartesian_stiffness_target_.bottomRightCorner(3, 3)
-        // << stiffness_br;
-        << 30 * Eigen::Matrix3d::Identity();
-    #undef VERBOSE
+        << stiffness_br;
+        // << 30 * Eigen::Matrix3d::Identity();
+    #define VERBOSE
     #ifdef VERBOSE
       std::cout << "cartesian_stiffness_target_" << std::endl;
       std::cout << cartesian_stiffness_target_ << std::endl;
@@ -294,6 +294,7 @@ void CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback(
     for (int i = 0; i < 3; i++) {
       for (int j = 0; j < 3; j++) {
         damping_tl.col(j).row(i) << 0.7 * config.force[3*i+j];
+        damping_br.col(j).row(i) << 0.7 * config.torque[3*i+j];
       }
     }
 
@@ -302,7 +303,8 @@ void CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback(
         // << 15 * Eigen::Matrix3d::Identity();
         << damping_tl;
     cartesian_damping_target_.bottomRightCorner(3, 3)
-        << 15 * Eigen::Matrix3d::Identity();
+        // << 15 * Eigen::Matrix3d::Identity();
+        << damping_br;
     // nullspace_stiffness_target_ = config.data[4].value/5;
     #ifdef VERBOSE
       std::cout << "cartesian_damping_target_" << std::endl;

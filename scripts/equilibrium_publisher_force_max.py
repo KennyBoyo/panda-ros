@@ -307,6 +307,7 @@ class equilibrium_publisher:
 		stiffness_config.force = self.current_stiffness
 		# stiffness_config.torque = t_mat
 		stiffness_config.force_mag = f_mag
+		stiffness_config.torque = 30 * np.eye(3).reshape(-1)
 		# stiffness_config.torque_mag = t_mag
 
 		if (verbose):
