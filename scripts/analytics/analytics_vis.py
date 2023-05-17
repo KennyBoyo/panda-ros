@@ -17,7 +17,7 @@ app.layout = html.Div(
 	html.Div([
 		dcc.Graph(id='collection_completeness', style={'display': 'inline-block'}),
 		dcc.Graph(id='shoulder_torques', style={'display': 'inline-block'}),
-		dcc.Graph(id='gaussian_mixture', style={'display': 'inline-block'}),
+		dcc.Graph(id='gaussian_mixture'),
 		# dcc.Graph(id='live-ws', style={'display': 'inline-block'}),
 		dcc.Interval(
 			id='timer-fast',
@@ -29,7 +29,7 @@ app.layout = html.Div(
 			interval=5*1000, # in milliseconds
 			n_intervals=0
 		)
-	])
+	]),
 )
 
 # Multiple components can update everytime interval gets fired.
@@ -47,7 +47,7 @@ def update_graph_live(n):
 	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, mag_array, plot_res)
 	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=x_pns_surface**2 + y_pns_surface**2 + z_pns_surface**2))
 	# data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array))
-	fig = plot_3d_objects(data, 1)
+	fig = plot_3d_objects(data, 1, width=1000, height=1000)
 	return fig
 
 # Multiple components can update everytime interval gets fired.
@@ -60,7 +60,7 @@ def update_graph_live(n):
 	data = []
 	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, 0.75*np.ones((2*plot_res, plot_res)), plot_res)
 	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array, colorscale=[[0, "rgb(255, 0, 0)"],[1, "rgb(0, 255, 0)"]], cmin=0, cmax=10 ))
-	fig = plot_3d_objects(data, 1)
+	fig = plot_3d_objects(data, 1, width=1000, height=1000)
 	return fig
 
 # Multiple components can update everytime interval gets fired.
@@ -77,7 +77,7 @@ def update_graph_live(n):
 	gmm.fit(points)
 	cls = gmm.predict(points)
 	data = visualize_3d_gmm(points, gmm.weights_, gmm.means_[:, :].T, np.sqrt(gmm.covariances_[:, :]).T, cls)
-	fig = plot_3d_objects(data, 1)
+	fig = plot_3d_objects(data, 2, width=2000, height=2000)
 	return fig
 
 # # Multiple components can update everytime interval gets fired.

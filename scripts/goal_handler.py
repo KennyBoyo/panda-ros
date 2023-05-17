@@ -12,7 +12,7 @@ class goal_handler:
 
 	def __init__(self):
 		self.robot_state_sub = rospy.Subscriber("/franka_state_controller/franka_states", FrankaState, self.update_goal)
-		self.new_goal_sub = rospy.Subscriber("/upper_limb_impedance_assessment/configure_goals", Path, self.set_new_goals)
+		self.new_goal_sub = rospy.Subscriber("/unity/trajectory", Path, self.set_new_goals)
 		self.goal_pub = rospy.Publisher("/upper_limb_impedance_assessment/goal", PoseStamped, queue_size=5)
 		self.goal_marker_pub = rospy.Publisher("/upper_limb_impedance_assessment/goal_marker", Marker, queue_size=5)
 		self.unity_pub = rospy.Publisher("/unity/current_goal", JointState, queue_size=5)
@@ -47,7 +47,13 @@ class goal_handler:
 
 	def set_new_goals(self, new_goals: Path):
 		self.goals_list = new_goals.poses
+
+		for goal in self.goals_list:
+			goal.pose.position.x, goal.pose.position.y, goal.pose.position.z = goal.pose.position.y, goal.pose.position.z, -goal.pose.position.x
+
+
 		self.current_goal_index = 0
+		print("setting new goals", self.goals_list)
 
 	def gen_pose(self, xp, yp, zp, xo=1, yo=0, zo=0, wo=1):
 		pose = PoseStamped()
