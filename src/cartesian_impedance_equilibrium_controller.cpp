@@ -257,7 +257,7 @@ void CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback(
         << 0 * Eigen::Matrix3d::Identity();
     // nullspace_stiffness_target_ = config.data[5].value/5;
     nullspace_stiffness_target_ = 0;
-  } else if (mode == 1) {
+  } else if (mode >= 1) {
     Eigen::Matrix3d stiffness_tl = Eigen::Matrix3d::Zero(3, 3);
     for (int i = 0; i < 3; i++) {
       for (int j = 0; j < 3; j++) {

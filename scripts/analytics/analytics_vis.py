@@ -7,6 +7,7 @@ from dash import dcc, html
 from dash.dependencies import Input, Output
 from analytics_config import *
 from analytics_utils import *
+from sklearn.mixture import GaussianMixture
 
 # ====================================================================================================================
 # Webapp for displaying analytics
@@ -15,7 +16,8 @@ app = dash.Dash(__name__)
 app.layout = html.Div(
 	html.Div([
 		dcc.Graph(id='collection_completeness', style={'display': 'inline-block'}),
-		dcc.Graph(id='live-graph', style={'display': 'inline-block'}),
+		dcc.Graph(id='shoulder_torques', style={'display': 'inline-block'}),
+		dcc.Graph(id='gaussian_mixture', style={'display': 'inline-block'}),
 		# dcc.Graph(id='live-ws', style={'display': 'inline-block'}),
 		dcc.Interval(
 			id='timer-fast',
@@ -31,7 +33,7 @@ app.layout = html.Div(
 )
 
 # Multiple components can update everytime interval gets fired.
-@app.callback(Output('live-graph', 'figure'),
+@app.callback(Output('shoulder_torques', 'figure'),
 			Input('timer-fast', 'n_intervals'))
 def update_graph_live(n):
 	with open(mag_pipe, 'rb') as f:
@@ -45,7 +47,7 @@ def update_graph_live(n):
 	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, mag_array, plot_res)
 	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=x_pns_surface**2 + y_pns_surface**2 + z_pns_surface**2))
 	# data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array))
-	fig = plot_3d_objects(data, 100)
+	fig = plot_3d_objects(data, 1)
 	return fig
 
 # Multiple components can update everytime interval gets fired.
@@ -58,6 +60,23 @@ def update_graph_live(n):
 	data = []
 	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, 0.75*np.ones((2*plot_res, plot_res)), plot_res)
 	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array, colorscale=[[0, "rgb(255, 0, 0)"],[1, "rgb(0, 255, 0)"]], cmin=0, cmax=10 ))
+	fig = plot_3d_objects(data, 1)
+	return fig
+
+# Multiple components can update everytime interval gets fired.
+@app.callback(Output('gaussian_mixture', 'figure'),
+			Input('timer-fast', 'n_intervals'))
+def update_graph_live(n):
+	with open(coord_pipe, "rb") as f:
+		points = np.loadtxt(f)
+
+	# Postion and force
+	points = np.c_[(points[:, :3], np.sum(np.abs(points[:, 3:6])**2,axis=-1)**(1./2))]
+	#fit the gaussian model
+	gmm = GaussianMixture(n_components=5, covariance_type='diag', random_state=0)
+	gmm.fit(points)
+	cls = gmm.predict(points)
+	data = visualize_3d_gmm(points, gmm.weights_, gmm.means_[:, :].T, np.sqrt(gmm.covariances_[:, :]).T, cls)
 	fig = plot_3d_objects(data, 1)
 	return fig
 

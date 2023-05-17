@@ -1,6 +1,6 @@
 import numpy as np
 
-datapipe_prefix = "/home/medrobotics/ROS_Workspaces/stars_ws/src/panda_ros/scripts/analytics"
+datapipe_prefix = "/home/kenzo/Documents/catkin_ws/src/panda_ros/scripts/analytics"
 mag_pipe = datapipe_prefix + '/data/mag_pipe.txt'
 count_pipe = datapipe_prefix + '/data/count_pipe.txt'
 angle_pipe = datapipe_prefix + '/data/angle_pipe.txt'
