@@ -242,7 +242,7 @@ void CartesianImpedanceEquilibriumController::complianceParamCallback(
 
 void CartesianImpedanceEquilibriumController::equilibriumStiffnessCallback(
     const panda_ros::StiffnessConfig& config) {
-
+  std::cout << mode << std::endl;
   if (mode == 0) {
     cartesian_stiffness_target_.setIdentity();
     cartesian_stiffness_target_.topLeftCorner(3, 3)

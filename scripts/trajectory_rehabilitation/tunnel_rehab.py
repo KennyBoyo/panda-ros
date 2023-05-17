@@ -4,6 +4,7 @@ import rospy
 import numpy as np 
 import tf2_ros
 from copy import deepcopy 
+from collections import deque
 from franka_msgs.msg import FrankaState
 from std_msgs.msg import Float64
 from nav_msgs.msg import Path
@@ -37,15 +38,22 @@ NO_ASSIST = 0
 DISTANCE_ASSIST = 1
 TUNNEL_ASSIST = 2
 assistance_mode_repr = ["NO_ASSIST", "DISTANCE_ASSIST", "TUNNEL_ASSIST"]
+
+# Rotational Stiffness
+FREE_ROTATIONAL_STIFFNESS = 0
+TRAINING_ROTATIONAL_STIFFNESS = 20
+
 class TunnelTrajectoryController():
     def __init__ (self, tunnel_radius: np.double, k_min, k_max, recordFlag: bool):
         self.tunnel_radius = tunnel_radius
-        self.hone_dist = 0.05
+        self.hone_dist = self.tunnel_radius/3
         self.record_data = recordFlag
 
         self.stiffness_limits = (k_min, k_max)
         self.currentState = STARTING_STATE
         self.pn_idx = 0
+        self.trajectory_id = 0
+
         self.f_fault_tolerance_stiffness = lambda d : k_min + ((k_max - k_min)/tunnel_radius)*(d-tunnel_radius)
         self.setup_marker_message()
 
@@ -130,7 +138,7 @@ class TunnelTrajectoryController():
                 p_delta = np.linalg.norm(p_current - self.trajectory_positions[0])
                 # desired_stiffness = K_default * self.stiffness_limits[MIN_IDX]
                 rospy.logwarn_throttle(2 ,f"Please hone EFF: {p_delta*1e3} millimeters away. Control pose of EFF.")
-                
+
                 if p_delta < self.hone_dist:
                     mode_repr = self.get_assistance_mode()
                     rospy.loginfo(f"EFF honed. Starting assistive rehabilitation in {mode_repr} mode.")
@@ -161,7 +169,8 @@ class TunnelTrajectoryController():
             desired_pose = self.trajectory_path.poses[min_idx]
             # Publish nearest point for visualisation (RVIZ)
             self.visualise_nearest_trajectory_point(p_reference, T_current)
-            
+            desired_stiffness[3:, 3:] = np.eye(3) * TRAINING_ROTATIONAL_STIFFNESS
+
             if self.record_data:
                 status_msg = TrainingStatus()
                 status_msg.header.stamp = rospy.Time.now()
@@ -170,7 +179,9 @@ class TunnelTrajectoryController():
                 status_msg.k_value = desired_stiffness[0,0]
                 status_msg.p_current = Vector3(*p_current)
                 status_msg.p_nearest = Vector3(*p_min)
+                status_msg.trajectory_id = self.trajectory_id
                 self.status_pub.publish(status_msg)
+
         # Publish updated parameters
         self.publish_update_parameters(desired_pose, desired_stiffness)
 
@@ -186,6 +197,11 @@ class TunnelTrajectoryController():
     def pb_reset_trajectory_handler(self, req):
         self.pbResetTrajectoryState = True
         return TriggerResponse(success=True)
+    
+    def get_average_position(self, p_delta):
+        self.honing_queue.append(p_delta)
+        if np.all(self.honing_queue):
+            return np.mean(self.honing_queue)
 
     def get_assistance_mode(self):
         self.assistanceMode = NO_ASSIST
@@ -212,6 +228,8 @@ class TunnelTrajectoryController():
             positions.append(np.asarray([posMsg.x, posMsg.y, posMsg.z]))
         
         self.trajectory_positions = np.vstack(positions)
+        self.trajectory_id = np.random.randint(1000)
+        np.save(f"/home/medrobotics/Documents/ShankerThesis/rosbags/{self.trajectory_id}.npy", self.trajectory_positions)
 
         # Publish first pose for EFF honing
         honePose = deepcopy(self.trajectory_path)
@@ -298,6 +316,8 @@ class TunnelTrajectoryController():
         new_stiffness.force = stiffness_update[:3, :3].reshape(-1)
         new_stiffness.headers.stamp = stamp
         new_stiffness.headers.frame_id = PARENT_FRAME
+        new_stiffness.torque = stiffness_update[3:, 3:].reshape(-1)
+
         self.stiffnessParams_pub.publish(new_stiffness)
 
 if __name__ == "__main__":
