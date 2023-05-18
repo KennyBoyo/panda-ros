@@ -1,6 +1,6 @@
 <launch>
   <arg name="record_bag" default="true"/>
-  <node name="training_controller" pkg="panda_ros" type="tunnel_rehab.py"
+  <node name="training_controller" pkg="panda_ros" type="tunnel_rehab_ramp.py"
         output="screen">
     <param name="record_bag" value = "($arg record_bag)"/>
   </node>
@@ -11,6 +11,6 @@
   </node>
 
   <node pkg="rosbag" type="record" name="training_rosbag" if="$(arg record_bag)"
-    args="record -o /home/medrobotics/Documents/ShankerThesis/rosbags/assistance assistive_controller/status"/>
+    args="record -o /home/medrobotics/Documents/ShankerThesis/rosbags/today assistive_controller/status"/>
 
 </launch>

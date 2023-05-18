@@ -43,11 +43,11 @@ assistance_mode_repr = ["NO_ASSIST", "DISTANCE_ASSIST", "TUNNEL_ASSIST"]
 
 # Rotational Stiffness
 FREE_ROTATIONAL_STIFFNESS = 0
-TRAINING_ROTATIONAL_STIFFNESS = 20
+TRAINING_ROTATIONAL_STIFFNESS = 15
 
 
 class StiffnessRamp():
-    def __init__(self, initialStiffness, desiredStiffness, desired_pose = PoseStamped(), steps_target = 10):
+    def __init__(self, initialStiffness, desiredStiffness, desired_pose = PoseStamped(), steps_target = 100):
         self.K_initial = initialStiffness
         self.K_desired = desiredStiffness
         self.desired_pose = desired_pose
@@ -58,7 +58,7 @@ class StiffnessRamp():
         self.step_target = steps_target
         self.step_current = 0
 
-        if initialStiffness == desiredStiffness:
+        if np.array_equal(initialStiffness, desiredStiffness):
             self.step_current = self.step_target
     
     def get_new_stiffness(self):
@@ -80,12 +80,12 @@ class StiffnessRamp():
 class TunnelTrajectoryController():
     def __init__ (self, tunnel_radius: np.double, k_min, k_max, recordFlag: bool):
         self.tunnel_radius = tunnel_radius
-        self.hone_dist = self.tunnel_radius/3
+        self.hone_dist = 0.05
         self.record_data = recordFlag
 
         self.stiffness_limits = (k_min, k_max)
         self.currentState = STARTING_STATE
-        self.previousStiffness = np.zeros(6,6)
+        self.previousStiffness = np.zeros((6,6))
         self.pn_idx = 0
         self.trajectory_id = 0
 
@@ -144,8 +144,11 @@ class TunnelTrajectoryController():
         elif self.pbNextTrajectoryState:
             self.pbNextTrajectoryState = False
             # Reset to IDLE state (Remove path?)
+            self.currentRamp = StiffnessRamp(self.previousStiffness, np.zeros((6,6)))
+
             self.nextState_afterRamp = IDLE_STATE
             self.currentState = RAMPING_DOWN_STATE
+
             rospy.loginfo("Ramping down then Next trajectory")
 
         # Check for state change in assistance_type
@@ -177,7 +180,7 @@ class TunnelTrajectoryController():
             elif state == HONING_STATE:
                 p_delta = np.linalg.norm(p_current - self.trajectory_positions[0])
                 # desired_stiffness = K_default * self.stiffness_limits[MIN_IDX]
-                desired_pose.pose = self.honing_pose
+                desired_pose = self.honing_pose
                 rospy.logwarn_throttle(2 ,f"Please hone EFF: {p_delta*1e3} millimeters away. Control pose of EFF.")
 
                 if p_delta < self.hone_dist:
@@ -186,17 +189,17 @@ class TunnelTrajectoryController():
                     self.currentState = RAMPING_UP_STATE
 
                     if self.assistanceMode == NO_ASSIST:
-                        self.currentRamp = StiffnessRamp(np.zeros(6,6), np.zeros(6,6), self.honing_pose)
+                        self.currentRamp = StiffnessRamp(np.zeros((6,6)), np.zeros((6,6)), self.honing_pose)
                     
                     elif self.assistanceMode == TUNNEL_ASSIST:
                         desired_ramp = np.diag([1,1,1,0,0,0]) * np.mean(self.stiffness_limits)
                         desired_ramp[3:, 3:] = np.eye(3) * TRAINING_ROTATIONAL_STIFFNESS
-                        self.currentRamp = StiffnessRamp(np.zeros(6,6), desired_ramp, self.honing_pose)
+                        self.currentRamp = StiffnessRamp(np.zeros((6,6)), desired_ramp, self.honing_pose)
                     
                     elif self.assistanceMode == DISTANCE_ASSIST:
                         desired_ramp = np.diag([1,1,1,0,0,0]) * self.stiffness_limits[MAX_IDX]
                         desired_ramp[3:, 3:] = np.eye(3) * TRAINING_ROTATIONAL_STIFFNESS
-                        self.currentRamp = StiffnessRamp(np.zeros(6,6), desired_ramp, self.honing_pose)
+                        self.currentRamp = StiffnessRamp(np.zeros((6,6)), desired_ramp, self.honing_pose)
 
         elif state == RAMPING_UP_STATE:
             desired_pose = self.currentRamp.get_desired_pose()
@@ -205,7 +208,7 @@ class TunnelTrajectoryController():
                 # Publish desired trajectory once.
                 self.trajectory_path.header.stamp = rospy.Time.now()
                 self.trajectory_pub.publish(self.trajectory_path)
-                
+
                 self.currentState = EXECUTE_STATE
                 desired_stiffness = self.currentRamp.K_desired
                 rospy.loginfo(f"Ramp up complete. Starting assistive rehabilitation in {assistance_mode_repr[self.assistanceMode]} mode.")
@@ -310,9 +313,11 @@ class TunnelTrajectoryController():
         honePose.poses = honePose.poses[:1]
         honePose.header.stamp = rospy.Time.now()
         self.trajectory_pub.publish(honePose)
+        self.deviation_pub.publish(Float64(-1))
+
         
-        desired_pose = honePose.poses[0].pose
-        self.marker.pose = desired_pose
+        desired_pose = honePose.poses[0]
+        self.marker.pose = desired_pose.pose
         self.marker.header.stamp = rospy.Time.now()
         self.pHoning_pub.publish(self.marker)
 
@@ -354,21 +359,21 @@ class TunnelTrajectoryController():
             k = self.stiffness_limits[MIN_IDX]
             p_eqm = p_current
             deviation_ratio = 0
-            rospy.loginfo(f'{"Movement Free Zone": ^30} {d:.5f}m')
+            rospy.loginfo_throttle(2, f'{"Movement Free Zone": ^30} {d:.5f}m')
 
         elif d < 2 * self.tunnel_radius:
             # Inside fault tolerant region. Use fault tunnel stiffness.
             k = self.f_fault_tolerance_stiffness(d)
             p_eqm = p_min
             deviation_ratio = (d-self.tunnel_radius)/(self.tunnel_radius)
-            rospy.loginfo(f"{'Fault Tolerance': ^30} {d:.5f}m")
+            rospy.loginfo_throttle(2, f"{'Fault Tolerance': ^30} {d:.5f}m")
 
         else:
             # In fault zone.
             k = self.stiffness_limits[MAX_IDX]
             p_eqm = p_min 
             deviation_ratio = 1
-            rospy.logwarn(f"{'Fault Zone': ^30} {d:.5f}m")
+            rospy.logwarn_throttle(2, f"{'Fault Zone': ^30} {d:.5f}m")
 
         # Stiffness matrix K, is 6x6
         K_stiffness = K_default * k
