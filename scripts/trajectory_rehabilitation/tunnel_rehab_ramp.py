@@ -32,6 +32,8 @@ NEW_TRAJECTORY_STATE = 1
 HONING_STATE = 2
 EXECUTE_STATE = 3
 RESET_STATE = 4
+RAMPING_UP_STATE = 5
+RAMPING_DOWN_STATE = 6
 
 # Assistance Types:
 NO_ASSIST = 0
@@ -43,6 +45,38 @@ assistance_mode_repr = ["NO_ASSIST", "DISTANCE_ASSIST", "TUNNEL_ASSIST"]
 FREE_ROTATIONAL_STIFFNESS = 0
 TRAINING_ROTATIONAL_STIFFNESS = 20
 
+
+class StiffnessRamp():
+    def __init__(self, initialStiffness, desiredStiffness, desired_pose = PoseStamped(), steps_target = 10):
+        self.K_initial = initialStiffness
+        self.K_desired = desiredStiffness
+        self.desired_pose = desired_pose
+
+        self.K_delta = desiredStiffness - initialStiffness
+
+
+        self.step_target = steps_target
+        self.step_current = 0
+
+        if initialStiffness == desiredStiffness:
+            self.step_current = self.step_target
+    
+    def get_new_stiffness(self):
+        factor = self.step_current/self.step_target
+        self.step_current += 1
+        return self.K_initial + self.K_delta * factor 
+    
+    def get_desired_pose(self):
+        return self.desired_pose
+    
+    def get_completion_status(self):
+        if self.step_current == self.step_target:
+            return True
+        else:
+            return False
+    
+
+
 class TunnelTrajectoryController():
     def __init__ (self, tunnel_radius: np.double, k_min, k_max, recordFlag: bool):
         self.tunnel_radius = tunnel_radius
@@ -51,6 +85,7 @@ class TunnelTrajectoryController():
 
         self.stiffness_limits = (k_min, k_max)
         self.currentState = STARTING_STATE
+        self.previousStiffness = np.zeros(6,6)
         self.pn_idx = 0
         self.trajectory_id = 0
 
@@ -99,23 +134,28 @@ class TunnelTrajectoryController():
         # Handle pb states
         if self.pbResetTrajectoryState:
             self.pbResetTrajectoryState = False
-            self.currentState = NEW_TRAJECTORY_STATE
-            rospy.loginfo("Reseting Trajectory....")
+
+            self.nextState_afterRamp = NEW_TRAJECTORY_STATE
+            self.currentState = RAMPING_DOWN_STATE
+
+            self.currentRamp = StiffnessRamp(self.previousStiffness, np.zeros((6,6)))
+            rospy.loginfo("Ramping down then Reset trajectory")
 
         elif self.pbNextTrajectoryState:
             self.pbNextTrajectoryState = False
             # Reset to IDLE state (Remove path?)
-            self.currentState = IDLE_STATE
+            self.nextState_afterRamp = IDLE_STATE
+            self.currentState = RAMPING_DOWN_STATE
+            rospy.loginfo("Ramping down then Next trajectory")
 
         # Check for state change in assistance_type
 
-        if state != EXECUTE_STATE:
+        if state != EXECUTE_STATE and state != RAMPING_DOWN_STATE and state != RAMPING_UP_STATE:
             # Null stiffness matrix for transparency
             desired_stiffness = K_default * 0
             desired_pose = PoseStamped()
             desired_pose.header.stamp = rospy.Time.now()
             desired_pose.header.frame_id = PARENT_FRAME
-
             if state == IDLE_STATE:
                 try:
                     req = self.trajectory_srv(PARENT_FRAME)
@@ -131,23 +171,57 @@ class TunnelTrajectoryController():
                     rospy.logerr("Service call failed: %s"%e)
 
             elif  state == NEW_TRAJECTORY_STATE:
-                    self.initialise_new_trajectory()
+                    self.honing_pose = self.initialise_new_trajectory()
                     self.currentState = HONING_STATE
                     
             elif state == HONING_STATE:
                 p_delta = np.linalg.norm(p_current - self.trajectory_positions[0])
                 # desired_stiffness = K_default * self.stiffness_limits[MIN_IDX]
+                desired_pose.pose = self.honing_pose
                 rospy.logwarn_throttle(2 ,f"Please hone EFF: {p_delta*1e3} millimeters away. Control pose of EFF.")
 
                 if p_delta < self.hone_dist:
                     mode_repr = self.get_assistance_mode()
-                    rospy.loginfo(f"EFF honed. Starting assistive rehabilitation in {mode_repr} mode.")
-                    self.currentState = EXECUTE_STATE
+                    rospy.loginfo(f"EFF honed. Ramping up.")
+                    self.currentState = RAMPING_UP_STATE
 
-                    # Publish desired trajectory once.
-                    self.trajectory_path.header.stamp = rospy.Time.now()
-                    self.trajectory_pub.publish(self.trajectory_path)
-            
+                    if self.assistanceMode == NO_ASSIST:
+                        self.currentRamp = StiffnessRamp(np.zeros(6,6), np.zeros(6,6), self.honing_pose)
+                    
+                    elif self.assistanceMode == TUNNEL_ASSIST:
+                        desired_ramp = np.diag([1,1,1,0,0,0]) * np.mean(self.stiffness_limits)
+                        desired_ramp[3:, 3:] = np.eye(3) * TRAINING_ROTATIONAL_STIFFNESS
+                        self.currentRamp = StiffnessRamp(np.zeros(6,6), desired_ramp, self.honing_pose)
+                    
+                    elif self.assistanceMode == DISTANCE_ASSIST:
+                        desired_ramp = np.diag([1,1,1,0,0,0]) * self.stiffness_limits[MAX_IDX]
+                        desired_ramp[3:, 3:] = np.eye(3) * TRAINING_ROTATIONAL_STIFFNESS
+                        self.currentRamp = StiffnessRamp(np.zeros(6,6), desired_ramp, self.honing_pose)
+
+        elif state == RAMPING_UP_STATE:
+            desired_pose = self.currentRamp.get_desired_pose()
+
+            if self.currentRamp.get_completion_status():
+                # Publish desired trajectory once.
+                self.trajectory_path.header.stamp = rospy.Time.now()
+                self.trajectory_pub.publish(self.trajectory_path)
+                
+                self.currentState = EXECUTE_STATE
+                desired_stiffness = self.currentRamp.K_desired
+                rospy.loginfo(f"Ramp up complete. Starting assistive rehabilitation in {assistance_mode_repr[self.assistanceMode]} mode.")
+            else: 
+                desired_stiffness = self.currentRamp.get_new_stiffness()
+
+        elif state == RAMPING_DOWN_STATE:
+            desired_pose = se3_to_PoseStamped(T_current, PARENT_FRAME)
+            if self.currentRamp.get_completion_status():
+
+                self.currentState = self.nextState_afterRamp
+                desired_stiffness = self.currentRamp.K_desired
+                desired_pose = desired_pose
+                rospy.loginfo("Ramp down complete.")
+            else: 
+                desired_stiffness = self.currentRamp.get_new_stiffness()
         else:
             # Do necessary calculations 
             min_idx, p_min, d_min = self.nearest_point_on_trajectory(p_current, 5)
@@ -237,9 +311,12 @@ class TunnelTrajectoryController():
         honePose.header.stamp = rospy.Time.now()
         self.trajectory_pub.publish(honePose)
         
-        self.marker.pose = honePose.poses[0].pose
+        desired_pose = honePose.poses[0].pose
+        self.marker.pose = desired_pose
         self.marker.header.stamp = rospy.Time.now()
         self.pHoning_pub.publish(self.marker)
+
+        return desired_pose
 
     def nearest_point_on_trajectory(self, pos: np.array, vicinity_idx: int):
         prev_idx = self.pn_idx 
@@ -311,6 +388,8 @@ class TunnelTrajectoryController():
         pose_update.header.stamp = stamp
         self.pEqm_pub.publish(pose_update)
         
+        self.previousStiffness = stiffness_update
+
         # Stiffness matrix
         new_stiffness = StiffnessConfig()
         new_stiffness.force = stiffness_update[:3, :3].reshape(-1)

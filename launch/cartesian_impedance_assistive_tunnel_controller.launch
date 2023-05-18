@@ -28,6 +28,12 @@
     args="record -O /franka_state_controller/franka_states /cartesian_impedance_equilibrium_controller/equilibrium_pose /cartesian_impedance_equilibrium_controller/stiffness_config
         /unity/desired_trajectory"
   />
+
+  <node name="message_synchroniser" pkg="panda_ros" type="message_synchroniser.py" output="screen" required="true"/>
+
+  <node name="painting" pkg="panda_ros" type="painting.py" output="screen" required="true"/>
+  <node name="goal_handler" pkg="panda_ros" type="goal_handler.py" output="screen" required="true"/>
+  
 </launch>
 
 
