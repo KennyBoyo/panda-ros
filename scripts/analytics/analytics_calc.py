@@ -18,7 +18,8 @@ class AnalyticsNode:
 		self.coord_array = np.empty((0,10), np.float64)
 		self.tf_buffer = tf2_ros.Buffer()
 		self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
-		self.default_shoulder_offset = np.array([-0.2943, 0.2433, 0.3912])
+		self.default_shoulder_offset = np.array([0.2943, 0.2433, 0.2712])
+		print("initialised AnalyticsNode")
 		
 	def callback(self, js: JointState):
 		res = 15
@@ -40,9 +41,9 @@ class AnalyticsNode:
 		self.angle_array = np.append(self.angle_array, np.array([shoulder2cartesian(angles[0])]), axis = 0)
 
 		trans, rot = self.get_transform()
-		coords[0] += trans
+		# coords[0] += trans
 
-		# coords[0] += self.default_shoulder_offset
+		coords[0] += self.default_shoulder_offset
 		coords[0] = np.array([coords[0, 0], coords[0, 2], -coords[0, 1]])
 		# print(js.effort[:4])
 		# coord_entry = np.append(self.transform_pose(js.velocity[:3], 'panda_link0', 'LShoulder_MidHip_frame'), effort)
@@ -52,7 +53,8 @@ class AnalyticsNode:
 		# print(coord_entry)
 		self.coord_array = np.append(self.coord_array, np.array([coord_entry]), axis=0)
 
-		print(self.tf_buffer.lookup_transform('panda_link0', 'LShoulder_MidHip_frame', rospy.Time(0)))
+		# print(self.tf_buffer.lookup_transform('panda_link0', 'LShoulder_MidHip_frame', rospy.Time(0)))
+		print(coord_entry)
 
 		np.savetxt(angle_pipe, self.angle_array)
 		np.savetxt(mag_pipe, mag_array)

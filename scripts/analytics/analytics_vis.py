@@ -71,13 +71,14 @@ def update_graph_live(n):
 		points = np.loadtxt(f)
 
 	# Postion and force
-	points = np.c_[(points[:, :3], np.sum(np.abs(points[:, 3:6])**2,axis=-1)**(1./2))]
+	# points = np.c_[(points[:, :3], np.sum(np.abs(points[:, 3:6])**2,axis=-1)**(1./2))]
 	#fit the gaussian model
 	gmm = GaussianMixture(n_components=5, covariance_type='diag', random_state=0)
 	gmm.fit(points)
 	cls = gmm.predict(points)
+	# print(points.shape)
 	data = visualize_3d_gmm(points, gmm.weights_, gmm.means_[:, :].T, np.sqrt(gmm.covariances_[:, :]).T, cls)
-	fig = plot_3d_objects(data, 2, width=2000, height=2000)
+	fig = plot_3d_objects(data, 2, width=1500, height=1500)
 	return fig
 
 # # Multiple components can update everytime interval gets fired.
