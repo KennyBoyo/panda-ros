@@ -18,5 +18,5 @@
 
   <node name="painting" pkg="panda_ros" type="painting.py" output="screen" required="true"/>
   <node name="goal_handler" pkg="panda_ros" type="goal_handler.py" output="screen" required="true"/>
-  <node name="analytics_calc" pkg="panda_ros" type="analytics_calc.py" output="screen" required="true"/>
+  <!-- <node name="analytics_calc" pkg="panda_ros" type="analytics_calc.py" output="screen" required="true"/> -->
 </launch>

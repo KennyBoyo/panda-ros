@@ -22,6 +22,7 @@ class goal_handler:
 		self.current_goal_index = 0
 		
 		self.robot_pose.header.frame_id = "panda_link0"
+		self.sequence = np.random.permutation(len(self.goals_list))
 
 		self.pos_marker = Marker()
 		self.goal_marker = Marker()
@@ -41,33 +42,36 @@ class goal_handler:
 		self.init_goal_handler()
 
 	def init_goal_handler(self):
-		self.goals_list = [self.gen_pose(0.5, 0.25, 0.5), self.gen_pose(0.5, -0.25, 0.5)]
+		self.goals_list = [self.gen_pose(0.54, 0.55, 0.48), self.gen_pose(0.38, -0.17, 0.35), self.gen_pose(0.47, 0.21, 0.31), self.gen_pose(0.26, 0, 0.83), self.gen_pose(0.29, -0.16, 0.56), self.gen_pose(0.45, 0.48, 0.35), self.gen_pose(0.45, 0.48, 0.35), self.gen_pose(0.4, 0.7, 0.25), self.gen_pose(0.5, 0.25, 0.5), self.gen_pose(0.5, -0.2, 0.5), self.gen_pose(0.5, 0.25, 0.55), self.gen_pose(0.35, -0.25, 0.33),]
+		self.goals_list = [self.gen_pose(0.54, 0.55, 0.48), self.gen_pose(0.38, -0.17, 0.35), self.gen_pose(0.47, 0.21, 0.31)]
 		self.current_goal_index = 0
+		self.sequence = np.random.permutation(len(self.goals_list))
 		self.init_goal_marker()
 
 	def set_new_goals(self, new_goals: Path):
 		self.goals_list = new_goals.poses
+		self.sequence = np.random.permutation(len(self.goals_list))
 
-		for goal in self.goals_list:
-			goal.pose.position.x, goal.pose.position.y, goal.pose.position.z = goal.pose.position.y, goal.pose.position.z, -goal.pose.position.x
+		# for goal in self.goals_list:
+		# 	goal.pose.position.x, goal.pose.position.y, goal.pose.position.z = goal.pose.position.y, goal.pose.position.z, -goal.pose.position.x
 
 
 		self.current_goal_index = 0
-		print("setting new goals", self.goals_list)
+		# print("setting new goals", self.goals_list)
 
-	def gen_pose(self, xp, yp, zp, xo=1, yo=0, zo=0, wo=1):
+	def gen_pose(self, xp, yp, zp, xo=1, yo=0, zo=0, wo=1, scale=1):
 		pose = PoseStamped()
-		pose.pose.position.x = xp
-		pose.pose.position.y = yp
-		pose.pose.position.z = zp
-		pose.pose.orientation.x = xo
-		pose.pose.orientation.y = yo
-		pose.pose.orientation.z = zo
-		pose.pose.orientation.w = wo
+		pose.pose.position.x = scale * xp
+		pose.pose.position.y = scale * yp
+		pose.pose.position.z = scale * zp
+		pose.pose.orientation.x = scale * xo
+		pose.pose.orientation.y = scale * yo
+		pose.pose.orientation.z = scale * zo
+		pose.pose.orientation.w = scale * wo
 		return pose
 	
 	def pub_current_goal(self):
-		self.goal_pub.publish(self.goals_list[self.current_goal_index])
+		self.goal_pub.publish(self.goals_list[self.sequence[self.current_goal_index]])
 
 	def update_goal(self, state: FrankaState):
 		self.update_goal_marker(state)
@@ -92,8 +96,11 @@ class goal_handler:
 
 	def update_goal_marker(self, state: FrankaState):
 
+		if len(self.goals_list) == 0:
+			return
+
 		x, y, z = self.snap_grid(state.O_T_EE[12], state.O_T_EE[13], state.O_T_EE[14])
-		xg, yg, zg = self.snap_grid(self.goals_list[self.current_goal_index].pose.position.x, self.goals_list[self.current_goal_index].pose.position.y, self.goals_list[self.current_goal_index].pose.position.z)
+		xg, yg, zg = self.snap_grid(self.goals_list[self.sequence[self.current_goal_index]].pose.position.x, self.goals_list[self.sequence[self.current_goal_index]].pose.position.y, self.goals_list[self.sequence[self.current_goal_index]].pose.position.z)
 		# print(x, y, z)
 
 		goal_reached = self.check_goal_reached([x, y, z], [xg, yg, zg])
@@ -126,6 +133,9 @@ class goal_handler:
 			self.current_goal_index += 1
 			if self.current_goal_index == len(self.goals_list):
 				self.current_goal_index = 0
+				self.sequence = np.random.permutation(len(self.goals_list))
+				print("goal", self.current_goal_index)
+				print("seq", self.sequence)
 			return True
 		return False
 	
