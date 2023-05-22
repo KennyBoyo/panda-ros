@@ -14,7 +14,7 @@ from panda_ros.srv import *
 
 PARENT_FRAME = 'panda_link0'
 p0 = np.asarray([ 0.4, -0.2,  0.3])
-spline_default = [[0.3, 0, 0.3], [0.35, -0.1, 0.7], [0.6, 0.35, 0.25]]
+spline_default = [[0.3, 0, 0.3], [0.35, -0.1, 0.7], [0.6, 0.7, 0.25]]
 
 class TrainingTrajectoryHandler():
 	def __init__(self, state_topic, d_min):
@@ -96,7 +96,7 @@ class TrainingTrajectoryHandler():
 
 		elif self.pbStates['add_default']:
 			# def_traj = parameterised_trajectory(p0, 30)
-			def_traj = spline_trajectory_generator(spline_default, 7, 50)
+			def_traj = spline_trajectory_generator(spline_default, 7, 30)
 			self.publish_trajectory(def_traj)
 			self.trajectories.append(def_traj)
 

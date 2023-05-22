@@ -39,7 +39,7 @@ RAMPING_DOWN_STATE = 6
 NO_ASSIST = 0
 DISTANCE_ASSIST = 1
 TUNNEL_ASSIST = 2
-assistance_mode_repr = ["NO_ASSIST", "DISTANCE_ASSIST", "TUNNEL_ASSIST"]
+assistance_mode_repr = ["NO_ASSIST", "CONSTANT_ASSIST", "TUNNEL_ASSIST"]
 
 # Rotational Stiffness
 FREE_ROTATIONAL_STIFFNESS = 0
@@ -80,7 +80,7 @@ class StiffnessRamp():
 class TunnelTrajectoryController():
     def __init__ (self, tunnel_radius: np.double, k_min, k_max, recordFlag: bool):
         self.tunnel_radius = tunnel_radius
-        self.hone_dist = 0.05
+        self.hone_dist = tunnel_radius/2
         self.record_data = recordFlag
 
         self.stiffness_limits = (k_min, k_max)
@@ -197,7 +197,7 @@ class TunnelTrajectoryController():
                         self.currentRamp = StiffnessRamp(np.zeros((6,6)), desired_ramp, self.honing_pose)
                     
                     elif self.assistanceMode == DISTANCE_ASSIST:
-                        desired_ramp = np.diag([1,1,1,0,0,0]) * self.stiffness_limits[MAX_IDX]
+                        desired_ramp = np.diag([1,1,1,0,0,0]) * np.mean(self.stiffness_limits)
                         desired_ramp[3:, 3:] = np.eye(3) * TRAINING_ROTATIONAL_STIFFNESS
                         self.currentRamp = StiffnessRamp(np.zeros((6,6)), desired_ramp, self.honing_pose)
 
@@ -384,7 +384,7 @@ class TunnelTrajectoryController():
     def get_distance_model_update_parameters(self, d: np.double, p_min, p_current):
         
         # Overall assistance 
-        return K_default * self.stiffness_limits[MAX_IDX], p_min
+        return K_default * 300, p_min
             
     def publish_update_parameters(self, pose_update: PoseStamped, stiffness_update):
         
