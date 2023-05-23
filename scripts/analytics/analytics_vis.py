@@ -73,7 +73,7 @@ def update_graph_live(n):
 	# Postion and force
 	# points = np.c_[(points[:, :3], np.sum(np.abs(points[:, 3:6])**2,axis=-1)**(1./2))]
 	#fit the gaussian model
-	gmm = GaussianMixture(n_components=5, covariance_type='diag', random_state=0)
+	gmm = GaussianMixture(n_components=7, covariance_type='diag', random_state=0)
 	gmm.fit(points)
 	cls = gmm.predict(points)
 	# print(points.shape)

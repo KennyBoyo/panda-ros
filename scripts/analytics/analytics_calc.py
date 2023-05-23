@@ -40,7 +40,7 @@ class AnalyticsNode:
 			
 		self.angle_array = np.append(self.angle_array, np.array([shoulder2cartesian(angles[0])]), axis = 0)
 
-		trans, rot = self.get_transform()
+		# trans, rot = self.get_transform()
 		# coords[0] += trans
 
 		coords[0] += self.default_shoulder_offset

@@ -22,7 +22,7 @@ class goal_handler:
 		self.current_goal_index = 0
 		
 		self.robot_pose.header.frame_id = "panda_link0"
-		self.sequence = np.random.permutation(len(self.goals_list))
+		# self.sequence = range(len(self.goals_list))#np.random.permutation(len(self.goals_list))
 
 		self.pos_marker = Marker()
 		self.goal_marker = Marker()
@@ -43,7 +43,7 @@ class goal_handler:
 
 	def init_goal_handler(self):
 		self.goals_list = [self.gen_pose(0.54, 0.55, 0.48), self.gen_pose(0.38, -0.17, 0.35), self.gen_pose(0.47, 0.21, 0.31), self.gen_pose(0.26, 0, 0.83), self.gen_pose(0.29, -0.16, 0.56), self.gen_pose(0.45, 0.48, 0.35), self.gen_pose(0.45, 0.48, 0.35), self.gen_pose(0.4, 0.7, 0.25), self.gen_pose(0.5, 0.25, 0.5), self.gen_pose(0.5, -0.2, 0.5), self.gen_pose(0.5, 0.25, 0.55), self.gen_pose(0.35, -0.25, 0.33),]
-		self.goals_list = [self.gen_pose(0.54, 0.55, 0.48), self.gen_pose(0.38, -0.17, 0.35), self.gen_pose(0.47, 0.21, 0.31)]
+		# self.goals_list = [self.gen_pose(0.54, 0.55, 0.48), self.gen_pose(0.38, -0.17, 0.35), self.gen_pose(0.47, 0.21, 0.31)]
 		self.current_goal_index = 0
 		self.sequence = np.random.permutation(len(self.goals_list))
 		self.init_goal_marker()
@@ -71,10 +71,11 @@ class goal_handler:
 		return pose
 	
 	def pub_current_goal(self):
-		self.goal_pub.publish(self.goals_list[self.sequence[self.current_goal_index]])
+		self.goal_pub.publish(self.goals_list[self.current_goal_index])
 
 	def update_goal(self, state: FrankaState):
 		self.update_goal_marker(state)
+		np.savetxt("./analytics/cubes", self.angle_array)
 
 	def init_goal_marker(self):
 		self.pos_marker.id = self.idx+1
@@ -100,7 +101,7 @@ class goal_handler:
 			return
 
 		x, y, z = self.snap_grid(state.O_T_EE[12], state.O_T_EE[13], state.O_T_EE[14])
-		xg, yg, zg = self.snap_grid(self.goals_list[self.sequence[self.current_goal_index]].pose.position.x, self.goals_list[self.sequence[self.current_goal_index]].pose.position.y, self.goals_list[self.sequence[self.current_goal_index]].pose.position.z)
+		xg, yg, zg = self.snap_grid(self.goals_list[self.current_goal_index].pose.position.x, self.goals_list[self.current_goal_index].pose.position.y, self.goals_list[self.current_goal_index].pose.position.z)
 		# print(x, y, z)
 
 		goal_reached = self.check_goal_reached([x, y, z], [xg, yg, zg])
