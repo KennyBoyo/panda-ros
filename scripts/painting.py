@@ -15,6 +15,7 @@ from franka_msgs.msg import FrankaState
 import tf.transformations as tr
 from panda_ros.msg import ImpedanceParams, StiffnessConfig
 from copy import deepcopy
+from analytics.analytics_config import *
 
 class paint_publisher:
 
@@ -45,7 +46,8 @@ class paint_publisher:
 		# Side width of cube workspace (meters) (min is 2x max reach of robot)
 		self.cube_len = 4
 		self.cube_grid = np.zeros((int(self.cube_len/self.cube_res), int(self.cube_len/self.cube_res), int(self.cube_len/self.cube_res)), dtype=np.bool8)
-
+		self.value_grid = np.zeros((int(self.cube_len/self.cube_res), int(self.cube_len/self.cube_res), int(self.cube_len/self.cube_res)), dtype=np.float32)
+		
 		# Unique Marker ID
 		self.idx = 0
 
@@ -109,12 +111,33 @@ class paint_publisher:
 		# Get Force and torque magnitude
 		f_mag = np.linalg.norm(f_vec)-4
 
+		# print(state.O_T_EE[12], state.O_T_EE[13], state.O_T_EE[14])
 		x, y, z = self.snap_grid(state.O_T_EE[12], state.O_T_EE[13], state.O_T_EE[14])
 		# print(x, y, z)
+		# cube_grid_index_offset = self.cube_len/2
+		# x1, y1, z1 = int((cube_grid_index_offset + x)/self.cube_res), int((cube_grid_index_offset + y)/self.cube_res), int((cube_grid_index_offset + z)/self.cube_res)
+		
+		# print("xyz", x, y, z)
+		# print("xyz1", x1, y1, z1)
+		# x2, y2, z2 = (x1+1)*self.cube_res-cube_grid_index_offset, (y1+1)*self.cube_res-cube_grid_index_offset, (z1+1)*self.cube_res-cube_grid_index_offset
 
-		taken = self.check_point(x, y, z)
-		if not taken:
+		# print("xyz2", x2, y2, z2)
+
+
+		# taken = self.check_point(x, y, z)
+		taken = self.update_point(x, y, z, f_mag)
+		# print(taken)
+		if taken:
 			return
+	
+
+		nz = np.nonzero(self.value_grid)
+		np.savetxt(cubic_coord_pipe, nz)
+		ls = []
+		for i in range(len(nz[0])):
+			ls.append(self.value_grid[nz[0][i], nz[1][i], nz[2][i]])
+		np.savetxt(cubic_value_pipe, np.array(ls))
+		# print(ls)
 		
 		point = Point()
 		point.x = x
@@ -135,7 +158,6 @@ class paint_publisher:
 		colour.g = rg_ratio #* 127
 		colour.b = 0
 
-		self.pos_marker
 		self.pos_marker.points.append(point)
 		self.pos_marker.colors.append(colour)
 
@@ -145,6 +167,14 @@ class paint_publisher:
 		self.pub_to_unity(x, y, z, colour.a, colour.r, colour.g, colour.b, wrench_o)
 		self.pub.publish(self.pos_marker)
 
+	def update_point(self, x, y, z, f_mag):
+		cube_grid_index_offset = self.cube_len/2
+		x, y, z = int((cube_grid_index_offset + x)/self.cube_res), int((cube_grid_index_offset + y)/self.cube_res), int((cube_grid_index_offset + z)/self.cube_res)
+		
+		if self.value_grid[x-1,y-1,z-1] < f_mag:
+			self.value_grid[x-1,y-1,z-1] = f_mag
+			return False
+		return True
 
 	def check_point(self, x, y, z):
 		cube_grid_index_offset = self.cube_len/2
@@ -152,8 +182,8 @@ class paint_publisher:
 		
 		if not self.cube_grid[x-1,y-1,z-1]:
 			self.cube_grid[x,y,z] = 1
-			return True
-		return False
+			return False
+		return True
 	
 	def pub_to_unity(self, x, y, z, a, r, g, b, s):
 		js = JointState()
@@ -174,7 +204,7 @@ class paint_publisher:
 		
 def main(args):
 	rospy.init_node('paint_publisher', anonymous=True, log_level=rospy.DEBUG)
-	obc = paint_publisher()
+	pp = paint_publisher()
 	try:
 		rospy.spin()
 	except KeyboardInterrupt:

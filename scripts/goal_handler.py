@@ -75,7 +75,7 @@ class goal_handler:
 
 	def update_goal(self, state: FrankaState):
 		self.update_goal_marker(state)
-		np.savetxt("./analytics/cubes", self.angle_array)
+		# np.savetxt("./analytics/cubes", self.angle_array)
 
 	def init_goal_marker(self):
 		self.pos_marker.id = self.idx+1
