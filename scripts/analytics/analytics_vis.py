@@ -82,17 +82,17 @@ def update_graph_live(n):
 	return fig
 
 # Multiple components can update everytime interval gets fired.
-@app.callback(Output('live-ws', 'figure'),
-			Input('timer-slow', 'n_intervals'))
-def update_graph_ws(n):
-	with open(angle_pipe, 'rb') as f:	
-		angle_array = np.loadtxt(f)
+# @app.callback(Output('live-ws', 'figure'),
+# 			Input('timer-slow', 'n_intervals'))
+# def update_graph_ws(n):
+# 	with open(angle_pipe, 'rb') as f:	
+# 		angle_array = np.loadtxt(f)
 	
-	data = []
-	data.append(go.Mesh3d(x=angle_array[:, 0], y=angle_array[:, 1], z=angle_array[:, 2], alphahull=0.1, opacity=1))#, color='lightpink))
-	fig = plot_3d_objects(data, 2) 
+# 	data = []
+# 	data.append(go.Mesh3d(x=angle_array[:, 0], y=angle_array[:, 1], z=angle_array[:, 2], alphahull=0.1, opacity=1))#, color='lightpink))
+# 	fig = plot_3d_objects(data, 2) 
 
-	return fig
+# 	return fig
 
 # ====================================================================================================================
 # Main
