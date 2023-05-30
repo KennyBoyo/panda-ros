@@ -227,6 +227,9 @@ def visualize_3d_gmm(points, w, mu, stdev, cls, export=True):
                                    mode='markers', marker=dict(
         size=5,   # choose a colorscale
         opacity=0.8
-    ), name=f"{np.linalg.norm(mu[3:, i])}"))
+    ), 
+    name=f"Force Mag{np.linalg.norm(mu[3:6, i])}, Joint Torque Mag: {np.linalg.norm(mu[6:, i])}"
+	# name=f"{np.linalg.norm(mu[3:, i])}"
+	))
 		
 	return data
