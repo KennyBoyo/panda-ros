@@ -18,7 +18,7 @@ app.layout = html.Div(
 		dcc.Graph(id='collection_completeness', style={'display': 'inline-block'}),
 		dcc.Graph(id='shoulder_torques', style={'display': 'inline-block'}),
 		dcc.Graph(id='gaussian_mixture'),
-		# dcc.Graph(id='live-ws', style={'display': 'inline-block'}),
+		dcc.Graph(id='live-ws', style={'display': 'inline-block'}),
 		dcc.Interval(
 			id='timer-fast',
 			interval=2*1000, # in milliseconds
@@ -81,18 +81,18 @@ def update_graph_live(n):
 	fig = plot_3d_objects(data, 2, width=1500, height=1500)
 	return fig
 
-# # Multiple components can update everytime interval gets fired.
-# @app.callback(Output('live-ws', 'figure'),
-# 			Input('timer-slow', 'n_intervals'))
-# def update_graph_ws(n):
-# 	with open(angle_pipe, 'rb') as f:	
-# 		angle_array = np.loadtxt(f)
+# Multiple components can update everytime interval gets fired.
+@app.callback(Output('live-ws', 'figure'),
+			Input('timer-slow', 'n_intervals'))
+def update_graph_ws(n):
+	with open(angle_pipe, 'rb') as f:	
+		angle_array = np.loadtxt(f)
 	
-# 	data = []
-# 	data.append(go.Mesh3d(x=angle_array[:, 0], y=angle_array[:, 1], z=angle_array[:, 2], alphahull=0.5, opacity=1))#, color='lightpink))
-# 	fig = plot_3d_objects(data, 2) 
+	data = []
+	data.append(go.Mesh3d(x=angle_array[:, 0], y=angle_array[:, 1], z=angle_array[:, 2], alphahull=0.1, opacity=1))#, color='lightpink))
+	fig = plot_3d_objects(data, 2) 
 
-# 	return fig
+	return fig
 
 # ====================================================================================================================
 # Main
