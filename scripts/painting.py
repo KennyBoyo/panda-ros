@@ -136,7 +136,7 @@ class paint_publisher:
 		ls = []
 		for i in range(len(nz[0])):
 			ls.append(self.value_grid[nz[0][i], nz[1][i], nz[2][i]])
-		np.savetxt(cubic_value_pipe, np.array(ls))
+		# np.savetxt(cubic_value_pipe, np.array(ls))
 		# print(ls)
 		
 		point = Point()
