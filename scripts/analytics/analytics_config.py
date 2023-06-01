@@ -3,7 +3,7 @@ from datetime import datetime
 now = datetime.now() # current date and time
 
 date_time = now.strftime("%m_%d_%Y_%H_%M")
-date_time = "unity3"
+date_time = "four_corners_random"
 # date_time = "sides_vertical"  
 datapipe_prefix = f"/home/medrobotics/ROS_Workspaces/stars_ws/src/panda_ros/scripts/analytics/data/{date_time}_"
 # datapipe_prefix = f"/home/kenzo/Documents/catkin_ws/src/panda_ros/scripts/analytics/data/{date_time}_"
