@@ -42,9 +42,9 @@ def gen_spherical(x, y, z, r, resolution=50):
 
 def plot_3d_objects(data, axes_size=100, axes=True, uirevision=True, width=600, height=600):
 	if axes:
-		data.append(go.Scatter3d(x = [0, axes_size], y = [0, 0], z = [0, 0], mode='lines', line = dict(color='red', width = 4)))
-		data.append(go.Scatter3d(x = [0, 0], y = [0, axes_size], z = [0, 0], mode='lines', line = dict(color='green', width = 4)))
-		data.append(go.Scatter3d(x = [0, 0], y = [0, 0], z = [0, axes_size], mode='lines', line = dict(color='blue', width = 4)))
+		data.append(go.Scatter3d(x = [0, axes_size], y = [0, 0], z = [0, 0], mode='lines', line = dict(color='red', width = 4), name="x"))
+		data.append(go.Scatter3d(x = [0, 0], y = [0, axes_size], z = [0, 0], mode='lines', line = dict(color='green', width = 4), name="y"))
+		data.append(go.Scatter3d(x = [0, 0], y = [0, 0], z = [0, axes_size], mode='lines', line = dict(color='blue', width = 4), name="z"))
 
 	fig = go.Figure(data=data)
 	fig.update_layout(
@@ -56,9 +56,9 @@ def plot_3d_objects(data, axes_size=100, axes=True, uirevision=True, width=600, 
 					z=0
 				),
 				eye=dict(
-					x=0,
-					y=1.0707,
-					z=1,
+					x=-1,
+					y=0.5,
+					z=0,
 				)
 			),
 			aspectratio = dict( x=1, y=1, z=1 ),
@@ -228,8 +228,9 @@ def visualize_3d_gmm(points, w, mu, stdev, cls, export=True):
         size=5,   # choose a colorscale
         opacity=0.8
     ), 
-    name=f"Force Mag{np.linalg.norm(mu[3:6, i])}, Joint Torque Mag: {np.linalg.norm(mu[6:, i])}"
+    # name=f"Force Mag{np.linalg.norm(mu[3:6, i])}, Joint Torque Mag: {np.linalg.norm(mu[6:, i])}"
 	# name=f"{np.linalg.norm(mu[3:, i])}"
+	name="Force Mag: %.3f, Joint Torque Mag: %.3f" % (np.linalg.norm(mu[3:6, i]), np.linalg.norm(mu[6:, i]))
 	))
 		
 	return data
