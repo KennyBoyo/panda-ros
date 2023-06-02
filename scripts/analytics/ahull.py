@@ -266,30 +266,30 @@ def get_BIC(iterations=20, n_cluster=10, filename=None, ctype="all"):
 
 namelist = ["unity1", "unity2", "unity_weak", "four_corners_random", "sides_random", "sides_horizontal", "sides_vertical", "center_random", "center_horizontal", "center_vertical", "full_random", "full_horizontal", "full_vertical"]
 
-# for i, filename in enumerate(namelist):
-# # filename = "sides_horizontal"
-# 	# nc = get_BIC(iterations=10, filename=filename, ctype="force")
-# 	# plot_gmm(n_components=nc, ctype="force", view="back", filename=filename)
-# 	# plot_gmm(n_components=nc, ctype="force", view="side", filename=filename)
-# 	# plot_gmm(n_components=nc, ctype="force", view="top", filename=filename)
+for i, filename in enumerate(namelist):
+# filename = "sides_horizontal"
+	nc = get_BIC(iterations=10, filename=filename, ctype="force")
+	plot_gmm(n_components=nc, ctype="force", view="back", filename=filename)
+	plot_gmm(n_components=nc, ctype="force", view="side", filename=filename)
+	plot_gmm(n_components=nc, ctype="force", view="top", filename=filename)
 	
-# 	nc = get_BIC(iterations=10, filename=filename, ctype="torque")
-# 	plot_gmm(n_components=nc, ctype="torque", view="back", filename=filename)
-# 	plot_gmm(n_components=nc, ctype="torque", view="side", filename=filename)
-# 	plot_gmm(n_components=nc, ctype="torque", view="top", filename=filename)
+	nc = get_BIC(iterations=10, filename=filename, ctype="torque")
+	plot_gmm(n_components=nc, ctype="torque", view="back", filename=filename)
+	plot_gmm(n_components=nc, ctype="torque", view="side", filename=filename)
+	plot_gmm(n_components=nc, ctype="torque", view="top", filename=filename)
  
  
-# 	nc = get_BIC(iterations=10, filename=filename, ctype="all")
-# 	plot_gmm(n_components=nc, ctype="all", view="back", filename=filename)
-# 	plot_gmm(n_components=nc, ctype="all", view="side", filename=filename)
-# 	plot_gmm(n_components=nc, ctype="all", view="top", filename=filename)
-# # plot_gmm(n_components=5)
+	nc = get_BIC(iterations=10, filename=filename, ctype="all")
+	plot_gmm(n_components=nc, ctype="all", view="back", filename=filename)
+	plot_gmm(n_components=nc, ctype="all", view="side", filename=filename)
+	plot_gmm(n_components=nc, ctype="all", view="top", filename=filename)
+# plot_gmm(n_components=5)
 
 
-filename = "sides_vertical"
-nc = get_BIC(iterations=10, filename=filename)
-plt.show()
-# nc=5
-plot_gmm(n_components=nc, ctype="all", view="back", filename=filename)
-plot_gmm(n_components=nc, ctype="all", view="side", filename=filename)
-plot_gmm(n_components=nc, ctype="all", view="top", filename=filename)
+# filename = "sides_vertical"
+# nc = get_BIC(iterations=10, filename=filename)
+# plt.show()
+# # nc=5
+# plot_gmm(n_components=nc, ctype="all", view="back", filename=filename)
+# plot_gmm(n_components=nc, ctype="all", view="side", filename=filename)
+# plot_gmm(n_components=nc, ctype="all", view="top", filename=filename)
