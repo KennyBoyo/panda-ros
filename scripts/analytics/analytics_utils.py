@@ -40,11 +40,49 @@ def gen_spherical(x, y, z, r, resolution=50):
 	Z = r * np.cos(v) + z
 	return (X, Y, Z)
 
-def plot_3d_objects(data, axes_size=100, axes=True, uirevision=True, width=600, height=600):
+def plot_3d_objects(data, axes_size=100, axes=True, uirevision=True, width=600, height=600, view="back"):
 	if axes:
 		data.append(go.Scatter3d(x = [0, axes_size], y = [0, 0], z = [0, 0], mode='lines', line = dict(color='red', width = 4), name="x"))
 		data.append(go.Scatter3d(x = [0, 0], y = [0, axes_size], z = [0, 0], mode='lines', line = dict(color='green', width = 4), name="y"))
 		data.append(go.Scatter3d(x = [0, 0], y = [0, 0], z = [0, axes_size], mode='lines', line = dict(color='blue', width = 4), name="z"))
+
+	# if view == "back":
+	# 	eye = dict(
+	# 		x=-2,
+	# 		y=0.5,
+	# 		z=0,
+	# 	)
+	# if view == "side":
+	# 	eye = dict(
+	# 		x=0,
+	# 		y=0.5,
+	# 		z=-2,
+	# 	)
+	# if view == "top":
+	# 	eye = dict(
+	# 		x=-0.5,
+	# 		y=2,
+	# 		z=0,
+	# 	)
+  
+	if view == "back":
+		eye = dict(
+			x=-3,
+			y=0.5,
+			z=0,
+		)
+	if view == "side":
+		eye = dict(
+			x=0,
+			y=0.5,
+			z=-3,
+		)
+	if view == "top":
+		eye = dict(
+			x=-0.5,
+			y=3,
+			z=0,
+		)
 
 	fig = go.Figure(data=data)
 	fig.update_layout(
@@ -55,11 +93,7 @@ def plot_3d_objects(data, axes_size=100, axes=True, uirevision=True, width=600, 
 					y=1,
 					z=0
 				),
-				eye=dict(
-					x=-1,
-					y=0.5,
-					z=0,
-				)
+				eye=eye
 			),
 			aspectratio = dict( x=1, y=1, z=1 ),
 			aspectmode = 'manual'
@@ -68,6 +102,7 @@ def plot_3d_objects(data, axes_size=100, axes=True, uirevision=True, width=600, 
 	fig.update_layout(uirevision=uirevision)
 	fig.update_layout(width=width)
 	fig.update_layout(height=height)
+	# fig.update_layout(showlegend=False)
 	return fig
 
 def shoulder2cartesian(angles, base=np.array([0, -1, 0])  ):
@@ -194,7 +229,7 @@ def plot_sphere(w=0, c=[0,0,0], r=[1, 1, 1], subdev=10, ax=None, sigma_multiplie
 
 	return ax
 
-def visualize_3d_gmm(points, w, mu, stdev, cls, export=True):
+def visualize_3d_gmm(points, w, mu, stdev, cls, export=True, ctype="all"):
 	'''
 	plots points and their corresponding gmm model in 3D
 	Input: 
@@ -220,17 +255,58 @@ def visualize_3d_gmm(points, w, mu, stdev, cls, export=True):
 		point_sets[cls[i]].append(points[i])
 	for i in range(len(point_sets)):
 		point_sets[i] = np.array(point_sets[i])
+  
 	
+	print(mu.shape)
 	data = []
 	for i in range(n_gaussians):
+		if ctype == "force":
+			name = "Force: %.3f" % (np.linalg.norm(mu[3:6, i]))
+		if ctype == "torque":
+			# name = "Shoulder: %.3f, Elbow: %.3f" % (np.linalg.norm(mu[3:, i]), )
+			name = "Shoulder: %.3f, Elbow: %.3f" % (np.linalg.norm(mu[3, i]), np.linalg.norm(mu[4, i]))
+		if ctype == "all":
+			name = "Force Mag: %.3f, Joint Torque Mag: %.3f" % (np.linalg.norm(mu[3:6, i]), np.linalg.norm(mu[6:, i]))
 		data.append(go.Scatter3d(x=point_sets[i][:, 0], y=point_sets[i][:, 1], z=point_sets[i][:, 2],
                                    mode='markers', marker=dict(
         size=5,   # choose a colorscale
         opacity=0.8
-    ), 
-    # name=f"Force Mag{np.linalg.norm(mu[3:6, i])}, Joint Torque Mag: {np.linalg.norm(mu[6:, i])}"
-	# name=f"{np.linalg.norm(mu[3:, i])}"
-	name="Force Mag: %.3f, Joint Torque Mag: %.3f" % (np.linalg.norm(mu[3:6, i]), np.linalg.norm(mu[6:, i]))
+		), 
+		# name=f"Force Mag{np.linalg.norm(mu[3:6, i])}, Joint Torque Mag: {np.linalg.norm(mu[6:, i])}"
+		# name=f"{np.linalg.norm(mu[3:, i])}"
+		name=name
 	))
 		
 	return data
+
+
+# def plot_3d_subplots(data, axes_size=100, axes=True, uirevision=True, width=600, height=600):
+# 	if axes:
+# 		data.append(go.Scatter3d(x = [0, axes_size], y = [0, 0], z = [0, 0], mode='lines', line = dict(color='red', width = 4), name="x"))
+# 		data.append(go.Scatter3d(x = [0, 0], y = [0, axes_size], z = [0, 0], mode='lines', line = dict(color='green', width = 4), name="y"))
+# 		data.append(go.Scatter3d(x = [0, 0], y = [0, 0], z = [0, axes_size], mode='lines', line = dict(color='blue', width = 4), name="z"))
+
+# 	fig = make_subplots(rows=1, cols=3, )
+# 	fig = go.Figure(data=data)
+# 	fig.update_layout(
+# 		scene=dict(
+# 			camera=dict(
+# 				up=dict(
+# 					x=0,
+# 					y=1,
+# 					z=0
+# 				),
+# 				eye=dict(
+# 					x=-1,
+# 					y=0.5,
+# 					z=0,
+# 				)
+# 			),
+# 			aspectratio = dict( x=1, y=1, z=1 ),
+# 			aspectmode = 'manual'
+# 		),
+# 	)
+# 	fig.update_layout(uirevision=uirevision)
+# 	fig.update_layout(width=width)
+# 	fig.update_layout(height=height)
+# 	return fig

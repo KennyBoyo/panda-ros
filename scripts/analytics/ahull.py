@@ -42,29 +42,40 @@ def plot_shoulder_torques():
 	fig.show()
 
 
-def plot_gmm(n_components=7, ctype = "all"):
-	with open(coord_pipe, "rb") as f:
-		points = np.loadtxt(f)
+def plot_gmm(n_components=7, ctype = "all", view="back", filename=None):
+	if filename == None:
+		with open(coord_pipe, "rb") as f:
+			points = np.loadtxt(f)
+	else:
+		with open(f"c:/Users/Jun Khai/Documents/Uni/Year 4 Sem 2/METR4912/panda_ros/scripts/analytics/data/{filename}_coord_pipe.txt", "rb") as f:
+			points = np.loadtxt(f)
 
 	# Postion and force
 	if ctype == "force":
 		points = np.c_[(points[:, :3], np.sum(np.abs(points[:, 3:6])**2,axis=-1)**(1./2))]
-	if ctype == "torques":
-		points = np.c_[(points[:, :3], np.sum(np.abs(points[:, 6:])**2,axis=-1)**(1./2))]
+	if ctype == "torque":
+		points = np.c_[np.c_[(points[:, :3], np.sum(np.abs(points[:, 6:9])**2,axis=-1)**(1./2))], points[:, 9]]
 	
-	
-	points[:, 0] = points[:, 0] - 0.5
-	points[:, 1] = points[:, 1] - 0.5
-	points[:, 2] = points[:, 2] + 0.5
+	# [0.2943, 0.2433, 0.2712]
+	points[:, 0] = points[:, 0] - 0.2943*2
+	points[:, 1] = points[:, 1] - 0.2433*2
+	points[:, 2] = points[:, 2] + 0.2712*2
  
  	#fit the gaussian model
 	gmm = GaussianMixture(n_components=n_components, covariance_type='diag', random_state=0)
 	gmm.fit(points)
 	cls = gmm.predict(points)
 	# print(points.shape)
-	data = visualize_3d_gmm(points, gmm.weights_, gmm.means_[:, :].T, np.sqrt(gmm.covariances_[:, :]).T, cls)
-	fig = plot_3d_objects(data, 1, width=800, height=700)
-	fig.show()
+	data = visualize_3d_gmm(points, gmm.weights_, gmm.means_[:, :].T, np.sqrt(gmm.covariances_[:, :]).T, cls, ctype=ctype)
+	fig = plot_3d_objects(data, 1, width=900, height=900, view=view)
+	if ctype == "force":
+		fig.write_image(f"./thesis_plots/force/{filename}_{ctype}_{view}.png")
+	elif ctype == "torque":
+		fig.write_image(f"./thesis_plots/torque/{filename}_{ctype}_{view}.png")    
+	elif ctype == "all":
+		fig.write_image(f"./thesis_plots/all/{filename}_{ctype}_{view}.png")
+	# fig.to_image(format="png")
+	# fig.show()
 	return points
 
 
@@ -166,7 +177,21 @@ def get_gmm_js(X, iterations = 20, n_cluster=10):
 	plt.xlabel("N. of clusters")
 	plt.ylabel("Distance")
  
-def get_BIC(X, iterations=20, n_cluster=10): 	
+def get_BIC(iterations=20, n_cluster=10, filename=None, ctype="all"): 	
+	if filename == None:
+		with open(coord_pipe, "rb") as f:
+			X = np.loadtxt(f)
+	else:
+		with open(f"c:/Users/Jun Khai/Documents/Uni/Year 4 Sem 2/METR4912/panda_ros/scripts/analytics/data/{filename}_coord_pipe.txt", "rb") as f:
+			X = np.loadtxt(f)
+   
+   
+   	# Postion and force
+	if ctype == "force":
+		X = np.c_[(X[:, :3], np.sum(np.abs(X[:, 3:6])**2,axis=-1)**(1./2))]
+	if ctype == "torque":
+		X = np.c_[np.c_[(X[:, :3], np.sum(np.abs(X[:, 6:9])**2,axis=-1)**(1./2))], X[:, 9]]
+   
 	n_clusters=np.arange(2, n_cluster)
 	bics=[]
 	bics_err=[]
@@ -197,22 +222,22 @@ def get_BIC(X, iterations=20, n_cluster=10):
 	plt.ylabel("grad(BIC)")
 	plt.legend()
 	
-	print(np.log(np.abs(10*np.gradient(bics))))
+	# print(np.log(np.abs(10*np.gradient(bics))))
 
-	plt.figure()
-	plt.errorbar(n_clusters, np.log(np.abs(10*np.gradient(bics))), label='BIC')
-	plt.title("Gradient of gradient of BIC Scores", fontsize=20)
-	plt.xticks(n_clusters)
-	plt.xlabel("N. of clusters")
-	plt.ylabel("grad(BIC)")
-	plt.legend()
+	# plt.figure()
+	# plt.errorbar(n_clusters, np.log(np.abs(10*np.gradient(bics))), label='BIC')
+	# plt.title("Gradient of gradient of BIC Scores", fontsize=20)
+	# plt.xticks(n_clusters)
+	# plt.xlabel("N. of clusters")
+	# plt.ylabel("grad(BIC)")
+	# plt.legend()
  
  
 	dbics = np.gradient(bics)
 	print(dbics.min)
 	dbics_range = np.amax(dbics) - np.amin(dbics)
 	print(dbics_range)
-	thres = 0.75
+	thres = 0.5
 	for i, val in enumerate(dbics):
 		print(val)
 		if val > (np.amin(dbics) + thres * dbics_range):
@@ -223,18 +248,48 @@ def get_BIC(X, iterations=20, n_cluster=10):
  
 
 # data = plot_gmm("force")
-with open(coord_pipe, "rb") as f:
-	data = np.loadtxt(f)
-data = np.c_[(data[:, :3], np.sum(np.abs(data[:, 3:6])**2,axis=-1)**(1./2))]
+# with open(coord_pipe, "rb") as f:
+# 	data = np.loadtxt(f)
+# data = np.c_[(data[:, :3], np.sum(np.abs(data[:, 3:6])**2,axis=-1)**(1./2))]
 
-print(data[:4, :3])
-data[:, 0] = data[:, 0] - 0.5
-data[:, 1] = data[:, 1] - 0.5
-data[:, 2] = data[:, 2] + 0.5
-print(data[:4, :3])
+# print(data[:4, :3])
+# data[:, 0] = data[:, 0] - 0.5
+# data[:, 1] = data[:, 1] - 0.5
+# data[:, 2] = data[:, 2] + 0.5
+# print(data[:4, :3])
+
+
 # get_silhouette(data, iterations=20)
-nc = get_BIC(data, iterations=10)
 # get_gmm_js(data, iterations=20)
+# plt.show()
+# print(datapipe_prefix)
+
+namelist = ["unity1", "unity2", "unity_weak", "four_corners_random", "sides_random", "sides_horizontal", "sides_vertical", "center_random", "center_horizontal", "center_vertical", "full_random", "full_horizontal", "full_vertical"]
+
+# for i, filename in enumerate(namelist):
+# # filename = "sides_horizontal"
+# 	# nc = get_BIC(iterations=10, filename=filename, ctype="force")
+# 	# plot_gmm(n_components=nc, ctype="force", view="back", filename=filename)
+# 	# plot_gmm(n_components=nc, ctype="force", view="side", filename=filename)
+# 	# plot_gmm(n_components=nc, ctype="force", view="top", filename=filename)
+	
+# 	nc = get_BIC(iterations=10, filename=filename, ctype="torque")
+# 	plot_gmm(n_components=nc, ctype="torque", view="back", filename=filename)
+# 	plot_gmm(n_components=nc, ctype="torque", view="side", filename=filename)
+# 	plot_gmm(n_components=nc, ctype="torque", view="top", filename=filename)
+ 
+ 
+# 	nc = get_BIC(iterations=10, filename=filename, ctype="all")
+# 	plot_gmm(n_components=nc, ctype="all", view="back", filename=filename)
+# 	plot_gmm(n_components=nc, ctype="all", view="side", filename=filename)
+# 	plot_gmm(n_components=nc, ctype="all", view="top", filename=filename)
+# # plot_gmm(n_components=5)
+
+
+filename = "sides_vertical"
+nc = get_BIC(iterations=10, filename=filename)
 plt.show()
-plot_gmm(n_components=nc, ctype="force")
-# plot_gmm(n_components=5)
+# nc=5
+plot_gmm(n_components=nc, ctype="all", view="back", filename=filename)
+plot_gmm(n_components=nc, ctype="all", view="side", filename=filename)
+plot_gmm(n_components=nc, ctype="all", view="top", filename=filename)
