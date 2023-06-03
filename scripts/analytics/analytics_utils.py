@@ -42,10 +42,29 @@ def gen_spherical(x, y, z, r, resolution=50):
 
 def plot_3d_objects(data, axes_size=100, axes=True, uirevision=True, width=600, height=600, view="back"):
 	if axes:
-		data.append(go.Scatter3d(x = [0, axes_size], y = [0, 0], z = [0, 0], mode='lines', line = dict(color='red', width = 4), name="x"))
-		data.append(go.Scatter3d(x = [0, 0], y = [0, axes_size], z = [0, 0], mode='lines', line = dict(color='green', width = 4), name="y"))
-		data.append(go.Scatter3d(x = [0, 0], y = [0, 0], z = [0, axes_size], mode='lines', line = dict(color='blue', width = 4), name="z"))
+		data.append(go.Scatter3d(x = [0, axes_size], y = [0, 0], z = [0, 0], mode='lines', line = dict(color='red', width = 4), name="x", legendgroup="axes", showlegend=False))
+		data.append(go.Scatter3d(x = [0, 0], y = [0, axes_size], z = [0, 0], mode='lines', line = dict(color='green', width = 4), name="y", legendgroup="axes", showlegend=False))
+		data.append(go.Scatter3d(x = [0, 0], y = [0, 0], z = [0, axes_size], mode='lines', line = dict(color='blue', width = 4), name="z", legendgroup="axes", showlegend=False))
 
+	if view == "back":
+		eye = dict(
+			x=-2.2,
+			y=0.5,
+			z=0,
+		)
+	if view == "side":
+		eye = dict(
+			x=0,
+			y=0.5,
+			z=-2.2,
+		)
+	if view == "top":
+		eye = dict(
+			x=-0.5,
+			y=2,
+			z=0,
+		)
+  
 	# if view == "back":
 	# 	eye = dict(
 	# 		x=-2,
@@ -64,25 +83,6 @@ def plot_3d_objects(data, axes_size=100, axes=True, uirevision=True, width=600, 
 	# 		y=2,
 	# 		z=0,
 	# 	)
-  
-	if view == "back":
-		eye = dict(
-			x=-3,
-			y=0.5,
-			z=0,
-		)
-	if view == "side":
-		eye = dict(
-			x=0,
-			y=0.5,
-			z=-3,
-		)
-	if view == "top":
-		eye = dict(
-			x=-0.5,
-			y=3,
-			z=0,
-		)
 
 	fig = go.Figure(data=data)
 	fig.update_layout(
@@ -102,7 +102,10 @@ def plot_3d_objects(data, axes_size=100, axes=True, uirevision=True, width=600, 
 	fig.update_layout(uirevision=uirevision)
 	fig.update_layout(width=width)
 	fig.update_layout(height=height)
-	# fig.update_layout(showlegend=False)
+	fig.update_layout(legend=dict(
+		font=dict(size=20)
+	))
+	
 	return fig
 
 def shoulder2cartesian(angles, base=np.array([0, -1, 0])  ):
@@ -268,9 +271,9 @@ def visualize_3d_gmm(points, w, mu, stdev, cls, export=True, ctype="all"):
 		if ctype == "all":
 			name = "Force Mag: %.3f, Joint Torque Mag: %.3f" % (np.linalg.norm(mu[3:6, i]), np.linalg.norm(mu[6:, i]))
 		data.append(go.Scatter3d(x=point_sets[i][:, 0], y=point_sets[i][:, 1], z=point_sets[i][:, 2],
-                                   mode='markers', marker=dict(
-        size=5,   # choose a colorscale
-        opacity=0.8
+								   mode='markers', marker=dict(
+		size=5,   # choose a colorscale
+		opacity=0.8
 		), 
 		# name=f"Force Mag{np.linalg.norm(mu[3:6, i])}, Joint Torque Mag: {np.linalg.norm(mu[6:, i])}"
 		# name=f"{np.linalg.norm(mu[3:, i])}"

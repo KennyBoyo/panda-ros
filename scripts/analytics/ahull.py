@@ -27,19 +27,31 @@ def plot_counts():
 	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, 0.75*np.ones((2*plot_res, plot_res)), plot_res)
 	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array, colorscale=[[0, "rgb(255, 0, 0)"],[1, "rgb(0, 255, 0)"]], cmin=0, cmax=10 ))
 	fig = plot_3d_objects(data, 1, width=1000, height=1000)
-	fig.show()
+	# fig.show()
 
 
-def plot_shoulder_torques():
-	with open(mag_pipe, 'rb') as f:
-		mag_array = np.loadtxt(f)
+def plot_shoulder_torques(filename="None", view ="back"):
+	if filename == None:
+		with open(mag_pipe, "rb") as f:
+			mag_array = np.loadtxt(f)
+	else:
+		with open(f"c:/Users/Jun Khai/Documents/Uni/Year 4 Sem 2/METR4912/panda_ros/scripts/analytics/data/{filename}_mag_pipe.txt", "rb") as f:
+			mag_array = np.loadtxt(f)
+	# with open(mag_pipe, 'rb') as f:
+	# 	mag_array = np.loadtxt(f)
 	
 	data = []
 	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, mag_array, plot_res)
 	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=x_pns_surface**2 + y_pns_surface**2 + z_pns_surface**2))
 	# data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array))
-	fig = plot_3d_objects(data, 1, width=1000, height=1000)
-	fig.show()
+	fig = plot_3d_objects(data, 1, width=1000, height=1000, view=view)
+	# fig.show()
+ 	
+	fig.update_layout(coloraxis_colorbar=dict(yanchor="top", y=1, x=0,
+										  ticks="outside",
+										  ticksuffix=" Nm"))
+ 
+	fig.write_image(f"./thesis_plots/spheroid/{filename}_{view}.png")
 
 
 def plot_gmm(n_components=7, ctype = "all", view="back", filename=None):
@@ -67,7 +79,28 @@ def plot_gmm(n_components=7, ctype = "all", view="back", filename=None):
 	cls = gmm.predict(points)
 	# print(points.shape)
 	data = visualize_3d_gmm(points, gmm.weights_, gmm.means_[:, :].T, np.sqrt(gmm.covariances_[:, :]).T, cls, ctype=ctype)
-	fig = plot_3d_objects(data, 1, width=900, height=900, view=view)
+	fig = plot_3d_objects(data, 1, width=800, height=800, view=view)
+ 
+	if ctype == "force":
+		# fig.update_layout(legend_orientation="h")
+		fig.update_layout(legend=dict(
+			yanchor="bottom",
+			y=0.5,
+			xanchor="left",
+			x=0.8
+		))
+	
+	else:
+		fig.update_layout(legend_orientation="h")
+		fig.update_layout(legend=dict(
+			yanchor="bottom",
+			y=-0.2,
+			xanchor="left",
+			x=0.14
+		))
+	
+	
+ 
 	if ctype == "force":
 		fig.write_image(f"./thesis_plots/force/{filename}_{ctype}_{view}.png")
 	elif ctype == "torque":
@@ -76,6 +109,9 @@ def plot_gmm(n_components=7, ctype = "all", view="back", filename=None):
 		fig.write_image(f"./thesis_plots/all/{filename}_{ctype}_{view}.png")
 	# fig.to_image(format="png")
 	# fig.show()
+ 
+ 
+	# fig.write_image(f"./{filename}_{ctype}_{view}.png")    
 	return points
 
 
@@ -266,30 +302,41 @@ def get_BIC(iterations=20, n_cluster=10, filename=None, ctype="all"):
 
 namelist = ["unity1", "unity2", "unity_weak", "four_corners_random", "sides_random", "sides_horizontal", "sides_vertical", "center_random", "center_horizontal", "center_vertical", "full_random", "full_horizontal", "full_vertical"]
 
-for i, filename in enumerate(namelist):
-# filename = "sides_horizontal"
-	nc = get_BIC(iterations=10, filename=filename, ctype="force")
-	plot_gmm(n_components=nc, ctype="force", view="back", filename=filename)
-	plot_gmm(n_components=nc, ctype="force", view="side", filename=filename)
-	plot_gmm(n_components=nc, ctype="force", view="top", filename=filename)
+# for i, filename in enumerate(namelist):
+# # filename = "sides_horizontal"
+# 	nc = get_BIC(iterations=10, filename=filename, ctype="force")
+# 	# plt.show()
+# 	plot_gmm(n_components=nc, ctype="force", view="back", filename=filename)
+# 	plot_gmm(n_components=nc, ctype="force", view="side", filename=filename)
+# 	plot_gmm(n_components=nc, ctype="force", view="top", filename=filename)
 	
-	nc = get_BIC(iterations=10, filename=filename, ctype="torque")
-	plot_gmm(n_components=nc, ctype="torque", view="back", filename=filename)
-	plot_gmm(n_components=nc, ctype="torque", view="side", filename=filename)
-	plot_gmm(n_components=nc, ctype="torque", view="top", filename=filename)
+# 	nc = get_BIC(iterations=10, filename=filename, ctype="torque")
+# 	plot_gmm(n_components=nc, ctype="torque", view="back", filename=filename)
+# 	plot_gmm(n_components=nc, ctype="torque", view="side", filename=filename)
+# 	plot_gmm(n_components=nc, ctype="torque", view="top", filename=filename)
  
  
-	nc = get_BIC(iterations=10, filename=filename, ctype="all")
-	plot_gmm(n_components=nc, ctype="all", view="back", filename=filename)
-	plot_gmm(n_components=nc, ctype="all", view="side", filename=filename)
-	plot_gmm(n_components=nc, ctype="all", view="top", filename=filename)
-# plot_gmm(n_components=5)
+# 	nc = get_BIC(iterations=10, filename=filename, ctype="all")
+# 	plot_gmm(n_components=nc, ctype="all", view="back", filename=filename)
+# 	plot_gmm(n_components=nc, ctype="all", view="side", filename=filename)
+# 	plot_gmm(n_components=nc, ctype="all", view="top", filename=filename)
+# # # plot_gmm(n_components=5)
+
+for i, filename in enumerate(namelist):
+    
 
 
 # filename = "sides_vertical"
-# nc = get_BIC(iterations=10, filename=filename)
+# # nc = get_BIC(iterations=10, filename=filename)
+# nc=4
 # plt.show()
 # # nc=5
+# plot_gmm(n_components=nc, ctype="force", view="back", filename=filename)
+# plot_gmm(n_components=nc, ctype="force", view="top", filename=filename)
+# plot_gmm(n_components=nc, ctype="force", view="side", filename=filename)
+# plot_gmm(n_components=nc, ctype="torque", view="back", filename=filename)
+# plot_gmm(n_components=nc, ctype="torque", view="top", filename=filename)
+# plot_gmm(n_components=nc, ctype="torque", view="side", filename=filename)
+# plot_gmm(n_components=nc, ctype="all", view="top", filename=filename)
 # plot_gmm(n_components=nc, ctype="all", view="back", filename=filename)
 # plot_gmm(n_components=nc, ctype="all", view="side", filename=filename)
-# plot_gmm(n_components=nc, ctype="all", view="top", filename=filename)
