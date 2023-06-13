@@ -11,7 +11,7 @@ from nav_msgs.msg import Path
 class goal_handler:
 
 	def __init__(self):
-		self.robot_state_sub = rospy.Subscriber("/franka_state_controller/franka_states", FrankaState, self.update_goal)
+		self.robot_state_sub = rospy.Subscriber("/franka_state_controller/franka_states", FrankaState, self.update_goal_marker)
 		self.new_goal_sub = rospy.Subscriber("/unity/trajectory", Path, self.set_new_goals)
 		self.goal_pub = rospy.Publisher("/upper_limb_impedance_assessment/goal", PoseStamped, queue_size=5)
 		self.goal_marker_pub = rospy.Publisher("/upper_limb_impedance_assessment/goal_marker", Marker, queue_size=5)
@@ -22,9 +22,6 @@ class goal_handler:
 		self.current_goal_index = 0
 		
 		self.robot_pose.header.frame_id = "panda_link0"
-		# self.sequence = range(len(self.goals_list))#np.random.permutation(len(self.goals_list))
-		# self.sequence = np.random.permutation(len(self.goals_list))
-
 		self.pos_marker = Marker()
 		self.goal_marker = Marker()
 
@@ -39,27 +36,29 @@ class goal_handler:
 
 		# Unique Marker ID
 		self.idx = 0
-
 		self.init_goal_handler()
 
+	"""
+	Initialise goal list
+	"""
 	def init_goal_handler(self):
+		# Base presets from experimentation
 		self.goals_list = [self.gen_pose(0.54, 0.55, 0.48), self.gen_pose(0.38, -0.17, 0.35), self.gen_pose(0.47, 0.21, 0.31), self.gen_pose(0.26, 0, 0.83), self.gen_pose(0.29, -0.16, 0.56), self.gen_pose(0.45, 0.48, 0.35), self.gen_pose(0.45, 0.48, 0.35), self.gen_pose(0.4, 0.7, 0.25), self.gen_pose(0.5, 0.25, 0.5), self.gen_pose(0.5, -0.2, 0.5), self.gen_pose(0.5, 0.25, 0.55), self.gen_pose(0.35, -0.25, 0.33),]
-		# self.goals_list = [self.gen_pose(0.54, 0.55, 0.48), self.gen_pose(0.38, -0.17, 0.35), self.gen_pose(0.47, 0.21, 0.31)]
 		self.current_goal_index = 0
 		self.sequence = np.random.permutation(len(self.goals_list))
 		self.init_goal_marker()
 
+	"""
+	Receive new goals from /unity/trajectory and overwrite existing goals
+	"""
 	def set_new_goals(self, new_goals: Path):
 		self.goals_list = new_goals.poses
 		self.sequence = np.random.permutation(len(self.goals_list))
-
-		# for goal in self.goals_list:
-		# 	goal.pose.position.x, goal.pose.position.y, goal.pose.position.z = goal.pose.position.y, goal.pose.position.z, -goal.pose.position.x
-
-
 		self.current_goal_index = 0
-		# print("setting new goals", self.goals_list)
 
+	"""
+	Convenience function for generating posestamped objects given a pose
+	"""
 	def gen_pose(self, xp, yp, zp, xo=1, yo=0, zo=0, wo=1, scale=1):
 		pose = PoseStamped()
 		pose.pose.position.x = scale * xp
@@ -71,14 +70,15 @@ class goal_handler:
 		pose.pose.orientation.w = scale * wo
 		return pose
 	
+	"""
+	Publish current goal to /upper_limb_impedance_assessment/goal
+	"""
 	def pub_current_goal(self):
-		# self.goal_pub.publish(self.goals_list[self.current_goal_index])
 		self.goal_pub.publish(self.goals_list[self.sequence[self.current_goal_index]])
 
-	def update_goal(self, state: FrankaState):
-		self.update_goal_marker(state)
-		# np.savetxt("./analytics/cubes", self.angle_array)
-
+	"""
+	Convenience method for initialising the goal marker object
+	"""
 	def init_goal_marker(self):
 		self.pos_marker.id = self.idx+1
 		self.pos_marker.header.frame_id = self.robot_pose.header.frame_id
@@ -97,19 +97,21 @@ class goal_handler:
 		self.pos_marker.scale.z = self.cube_res
 
 
+	"""
+	Checks whether the panda end effector has reached the goal position and updates the current goal if necessary
+	"""
 	def update_goal_marker(self, state: FrankaState):
 
 		if len(self.goals_list) == 0:
 			return
 
+		# Snap current panda end effector position and goal position to grid for comparison
 		x, y, z = self.snap_grid(state.O_T_EE[12], state.O_T_EE[13], state.O_T_EE[14])
-		# xg, yg, zg = self.snap_grid(self.goals_list[self.current_goal_index].pose.position.x, self.goals_list[self.current_goal_index].pose.position.y, self.goals_list[self.current_goal_index].pose.position.z)
 		xg, yg, zg = self.snap_grid(self.goals_list[self.sequence[self.current_goal_index]].pose.position.x, self.goals_list[self.sequence[self.current_goal_index]].pose.position.y, self.goals_list[self.sequence[self.current_goal_index]].pose.position.z)
-		
-		# print(x, y, z)
 
 		goal_reached = self.check_goal_reached([x, y, z], [xg, yg, zg])
 		
+		# Create a point to be published for display
 		point = Point()
 		point.x = xg
 		point.y = yg
@@ -120,18 +122,11 @@ class goal_handler:
 		self.pub_to_unity(xg, yg, zg, self.pos_marker.color.a, self.pos_marker.color.r, self.pos_marker.color.g, self.pos_marker.color.b)
 		self.goal_marker_pub.publish(self.pos_marker)
 		self.pub_current_goal()
-
-
-	def check_point(self, x, y, z):
-		cube_grid_index_offset = self.cube_len/2
-		x, y, z = int((cube_grid_index_offset + x)/self.cube_res), int((cube_grid_index_offset + y)/self.cube_res), int((cube_grid_index_offset + z)/self.cube_res)
-		
-		if not self.cube_grid[x-1,y-1,z-1]:
-			self.cube_grid[x,y,z] = 1
-			return True
-		return False
 	
-	def check_goal_reached(self, p1, p2):
+	"""
+	Compares two points to see the goal has been reached, updates the goal index if it has.
+	"""
+	def check_goal_reached(self, p1, p2, verbose=False):
 		p1 = np.array(p1)
 		p2 = np.array(p2)
 		if np.around(np.linalg.norm(p1 - p2), self.cube_res_places)  == 0.:
@@ -139,11 +134,15 @@ class goal_handler:
 			if self.current_goal_index == len(self.goals_list):
 				self.current_goal_index = 0
 				self.sequence = np.random.permutation(len(self.goals_list))
-				print("goal", self.current_goal_index)
-				print("seq", self.sequence)
+				if verbose:
+					print("goal", self.current_goal_index)
+					print("seq", self.sequence)
 			return True
 		return False
 	
+	"""
+	Publishes the current point and colors to unity
+	"""
 	def pub_to_unity(self, x, y, z, a, r, g, b):
 		js = JointState()
 		js.header.stamp = rospy.Time.now()
@@ -154,6 +153,9 @@ class goal_handler:
 
 		self.unity_pub.publish(js)
 
+	"""
+	Snaps a point to a predefined grid in the initialisation of the class
+	"""
 	def snap_grid(self, x, y, z):
 		if self.cube_res_factor > 1:
 			return np.around(x*(10/self.cube_res_factor), self.cube_res_places-1)/(10/self.cube_res_factor), np.around(y*(10/self.cube_res_factor), self.cube_res_places-1)/(10/self.cube_res_factor), np.around(z*(10/self.cube_res_factor), self.cube_res_places-1)/(10/self.cube_res_factor)

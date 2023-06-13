@@ -176,6 +176,9 @@ class paint_publisher:
 			return False
 		return True
 
+	"""
+	Check if the current coordinates have been occupied before
+	"""
 	def check_point(self, x, y, z):
 		cube_grid_index_offset = self.cube_len/2
 		x, y, z = int((cube_grid_index_offset + x)/self.cube_res), int((cube_grid_index_offset + y)/self.cube_res), int((cube_grid_index_offset + z)/self.cube_res)
