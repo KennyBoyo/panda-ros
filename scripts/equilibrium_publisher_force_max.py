@@ -42,9 +42,6 @@ class equilibrium_publisher:
 		self.force_stiff = rospy.Publisher("/cartesian_impedance_equilibrium_controller/stiffness_config", StiffnessConfig, queue_size=5)
 		self.pub_visualiser = rospy.Publisher("/cartesian_impedance_equilibrium_controller/force_direction", MarkerArray, queue_size=5)
 
-
-		# self.stiffness = rospy.Publisher("/cartesian_impedance_equilibrium_controllerdynamic_reconfigure_compliance_param_node/parameter_updates", Config, queue_size=10)
-		# self.position_limits = [[-0.6, 0.6], [-0.6, 0.6], [0.05, 0.9]]
 		self.robot_pose_eq = PoseStamped()
 		self.robot_pose = PoseStamped()
 		self.pose_index = 0
@@ -167,6 +164,15 @@ class equilibrium_publisher:
 		self.force_stiff.publish(stiffness_config)
 
 	def get_rotated_ellipsoid(self, dir_vec, mag = 1, normal_scale = 0.1):
+		"""Given a direction and magnitude, returns a rotation matrix representing 
+		the rotation from x axis to direction.
+		Args:
+			dir_vec (numpy.array): Direction vector for the 
+			mag (int, optional): Magnitude in principal direction. Defaults to 1.
+			normal_scale (float, optional): Scaling vector of non-principal directions. Defaults to 0.1.
+		Returns:
+			numpy.array(3x3): A rotation matrix representing the rotation from x axis to direction.
+		"""
 		axis = np.array([1, 0, 0])
 		rotation = rotation_matrix_from_vectors(axis, dir_vec)
 
@@ -179,11 +185,20 @@ class equilibrium_publisher:
 		return k_mat
 
 	def impedance_mode_callback(self, msg):
+		""" Handles the change of impedance mode
+		Args:
+			msg (std_msgs.msgs.Int8): Impedance mode to be set to
+		"""
 		rospy.loginfo(self.mode)
 		self.reset_stiffness()
 		self.mode = msg.data
 
 	def generate_marker(self, state):
+		"""Generates a marker message which can be visualised in rviz
+
+		Args:
+			state (FrankaState): Current state of the Panda
+		"""
 		wrench_markers = MarkerArray()
 		force_marker = Marker()
 		torque_marker = Marker()

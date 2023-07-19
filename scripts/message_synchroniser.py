@@ -12,6 +12,9 @@ Class that synchronises the FrankaState and JointState messages from the Franka 
 """
 class MessageSynchroniserNode:
 	def __init__(self):
+		"""
+		Initialise message synchronise node
+		"""
 		self.synced_msgs = rospy.Publisher("/os3/synchronised_step_problem", JointState, queue_size=5)
 
 		arm_state_topic = "/problem_topic"

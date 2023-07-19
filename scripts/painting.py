@@ -18,6 +18,9 @@ from copy import deepcopy
 from analytics.analytics_config import *
 
 class paint_publisher:
+	"""
+	Class that handles visualising the cubic workspace 
+	"""
 
 	def __init__(self):
 		self.sub = rospy.Subscriber("/franka_state_controller/franka_states", FrankaState, self.paint)
@@ -54,11 +57,20 @@ class paint_publisher:
 
 
 	def paint(self, state: FrankaState):
+		"""
+		Callback for painting when receiving a franka state message
+
+		Args:
+			state (FrankaState): current state of the panda
+		"""
 		self.init_marker()
 		self.generate_workspace_marker()
 		self.generate_marker(state)
 
 	def init_marker(self):
+		"""
+		Convenience function to initialise a marker for visualisation of cubes
+		"""
 		self.pos_marker.id = self.idx
 		self.pos_marker.header.frame_id = self.robot_pose.header.frame_id
 		self.pos_marker.pose.orientation.x = 0
@@ -76,6 +88,9 @@ class paint_publisher:
 		self.pos_marker.scale.z = self.cube_res
 
 	def generate_workspace_marker(self):
+		"""
+		Generate a marker representing the approximate workspace of the panda
+		"""
 		self.workspace_marker = Marker()
 		self.workspace_marker.id = self.idx
 		# self.idx += 1
@@ -104,40 +119,31 @@ class paint_publisher:
 
 
 	def generate_marker(self, state: FrankaState):
+		"""
+		Generates a marker at the current position of the panda end effector
 
+		Args:
+			state (FrankaState): Current state of the panda
+		"""
 		wrench_o = state.O_F_ext_hat_K
 		f_vec = np.array([wrench_o[0], wrench_o[1], wrench_o[2]])
 		
 		# Get Force and torque magnitude
 		f_mag = np.linalg.norm(f_vec)-4
 
-		# print(state.O_T_EE[12], state.O_T_EE[13], state.O_T_EE[14])
 		x, y, z = self.snap_grid(state.O_T_EE[12], state.O_T_EE[13], state.O_T_EE[14])
-		# print(x, y, z)
-		# cube_grid_index_offset = self.cube_len/2
-		# x1, y1, z1 = int((cube_grid_index_offset + x)/self.cube_res), int((cube_grid_index_offset + y)/self.cube_res), int((cube_grid_index_offset + z)/self.cube_res)
-		
-		# print("xyz", x, y, z)
-		# print("xyz1", x1, y1, z1)
-		# x2, y2, z2 = (x1+1)*self.cube_res-cube_grid_index_offset, (y1+1)*self.cube_res-cube_grid_index_offset, (z1+1)*self.cube_res-cube_grid_index_offset
 
-		# print("xyz2", x2, y2, z2)
-
-
-		# taken = self.check_point(x, y, z)
 		taken = self.update_point(x, y, z, f_mag)
-		# print(taken)
 		if taken:
 			return
-	
 
-		nz = np.nonzero(self.value_grid)
-		np.savetxt(cubic_coord_pipe, nz)
-		ls = []
-		for i in range(len(nz[0])):
-			ls.append(self.value_grid[nz[0][i], nz[1][i], nz[2][i]])
-		np.savetxt(cubic_value_pipe, np.array(ls))
-		# print(ls)
+		# # Uncomment to log cubes for analysis later - warning - it might cause lagging. This should eb optimised in the future
+		# nz = np.nonzero(self.value_grid)
+		# np.savetxt(cubic_coord_pipe, nz)
+		# ls = []
+		# for i in range(len(nz[0])):
+		# 	ls.append(self.value_grid[nz[0][i], nz[1][i], nz[2][i]])
+		# np.savetxt(cubic_value_pipe, np.array(ls))
 		
 		point = Point()
 		point.x = x
@@ -161,13 +167,22 @@ class paint_publisher:
 		self.pos_marker.points.append(point)
 		self.pos_marker.colors.append(colour)
 
-		# print(self.pos_marker)
-
-		# self.pos_markers.markers.append(pos_marker)
 		self.pub_to_unity(x, y, z, colour.a, colour.r, colour.g, colour.b, wrench_o)
 		self.pub.publish(self.pos_marker)
 
 	def update_point(self, x, y, z, f_mag):
+		"""
+		Update 
+
+		Args:
+			x (_type_): _description_
+			y (_type_): _description_
+			z (_type_): _description_
+			f_mag (_type_): _description_
+
+		Returns:
+			_type_: _description_
+		"""
 		cube_grid_index_offset = self.cube_len/2
 		x, y, z = int((cube_grid_index_offset + x)/self.cube_res), int((cube_grid_index_offset + y)/self.cube_res), int((cube_grid_index_offset + z)/self.cube_res)
 		
@@ -176,10 +191,18 @@ class paint_publisher:
 			return False
 		return True
 
-	"""
-	Check if the current coordinates have been occupied before
-	"""
 	def check_point(self, x, y, z):
+		"""
+		Check if the current coordinates have been occupied before
+
+		Args:
+			x (int): x coordinate of point
+			y (int): y coordinate of point
+			z (int): z coordinate of point
+
+		Returns:
+			boolean: Boolean representing whether the coordinate has been occupied before
+		"""
 		cube_grid_index_offset = self.cube_len/2
 		x, y, z = int((cube_grid_index_offset + x)/self.cube_res), int((cube_grid_index_offset + y)/self.cube_res), int((cube_grid_index_offset + z)/self.cube_res)
 		
@@ -189,6 +212,19 @@ class paint_publisher:
 		return True
 	
 	def pub_to_unity(self, x, y, z, a, r, g, b, s):
+		"""
+		Publishes the coordinate of the center of the cube to unity
+
+		Args:
+			x (float): x position of cube
+			y (_type_): y position of cube
+			z (_type_): z position of cube
+			a (_type_): transparency of cube
+			r (_type_): red colour of cube
+			g (_type_): green colour of cube
+			b (_type_): blue colour of cube
+			s (_type_): size of cube
+		"""
 		js = JointState()
 		js.header.stamp = rospy.Time.now()
 
@@ -200,7 +236,17 @@ class paint_publisher:
 
 
 	def snap_grid(self, x, y, z):
+		"""
+		Snaps a point to the closest point on the grid defined in the init function of the class
 
+		Args:
+			x (float): x position of the point
+			y (float): y position of the point
+			z (float): z position of the point
+
+		Returns:
+			_type_: a point representing the closest point on the grid to the position specified
+		"""
 		if self.cube_res_factor > 1:
 			return np.around(x*(10/self.cube_res_factor), self.cube_res_places-1)/(10/self.cube_res_factor), np.around(y*(10/self.cube_res_factor), self.cube_res_places-1)/(10/self.cube_res_factor), np.around(z*(10/self.cube_res_factor), self.cube_res_places-1)/(10/self.cube_res_factor)
 		return np.around(x*(10/self.cube_res_factor), self.cube_res_places)/(10/self.cube_res_factor), np.around(y*(10/self.cube_res_factor), self.cube_res_places)/(10/self.cube_res_factor), np.around(z*(10/self.cube_res_factor), self.cube_res_places)/(10/self.cube_res_factor)
