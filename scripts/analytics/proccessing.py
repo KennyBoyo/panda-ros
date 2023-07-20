@@ -9,17 +9,26 @@ from analytics_config import *
 from analytics_utils import *
 from sklearn.mixture import GaussianMixture
 
+# ================================================================================================================
+# Utility file used to further process and parse data for reporting
+# ================================================================================================================
+
 def plot_alphahull():
+	"""
+	Genetares the alpha hull for a set of data
+	"""
 	with open(angle_pipe, 'rb') as f:	
 			angle_array = np.loadtxt(f)
 		
 	data = []
 	data.append(go.Mesh3d(x=angle_array[:, 0], y=angle_array[:, 1], z=angle_array[:, 2], alphahull=-2, opacity=1))#, color='lightpink))
-	fig = plot_3d_objects(data, 2) 
-
+	fig = plot_3d_objects(data, 2)
 	fig.show()
 
 def plot_counts():
+	"""
+	Plots the count sphere for a set of data
+	"""
 	with open(count_pipe, 'rb') as f:
 		count_array = np.loadtxt(f)
 
@@ -27,25 +36,28 @@ def plot_counts():
 	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, 0.75*np.ones((2*plot_res, plot_res)), plot_res)
 	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array, colorscale=[[0, "rgb(255, 0, 0)"],[1, "rgb(0, 255, 0)"]], cmin=0, cmax=10 ))
 	fig = plot_3d_objects(data, 1, width=1000, height=1000)
-	# fig.show()
+	fig.show()
 
 
 def plot_shoulder_torques(filename="None", view ="back"):
+	"""
+	Plots the shoulder torque spheroid from a specified file
+
+	Args:
+		filename (str, optional): path of file. Defaults to "None".
+		view (str, optional): the view that the graph should be saved as. Defaults to "back".
+	"""
 	if filename == None:
 		with open(mag_pipe, "rb") as f:
 			mag_array = np.loadtxt(f)
 	else:
 		with open(f"c:/Users/Jun Khai/Documents/Uni/Year 4 Sem 2/METR4912/panda_ros/scripts/analytics/data/{filename}_mag_pipe.txt", "rb") as f:
 			mag_array = np.loadtxt(f)
-	# with open(mag_pipe, 'rb') as f:
-	# 	mag_array = np.loadtxt(f)
 	
 	data = []
 	(x_pns_surface, y_pns_surface, z_pns_surface) = gen_spherical(0, 0, 0, mag_array, plot_res)
 	data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=x_pns_surface**2 + y_pns_surface**2 + z_pns_surface**2))
-	# data.append(go.Surface(x=x_pns_surface, y=y_pns_surface, z=z_pns_surface, opacity=1, surfacecolor=count_array))
 	fig = plot_3d_objects(data, 1, width=1000, height=1000, view=view)
-	# fig.show()
  	
 	fig.update_layout(coloraxis_colorbar=dict(yanchor="top", y=1, x=0,
 										  ticks="outside",
@@ -55,6 +67,18 @@ def plot_shoulder_torques(filename="None", view ="back"):
 
 
 def plot_gmm(n_components=7, ctype = "all", view="back", filename=None):
+	"""
+	Plots a gaussian mixture model with a set number of components from a data file
+
+	Args:
+		n_components (int, optional): number of components to be in the gaussian mixture model. Defaults to 7.
+		ctype (str, optional): class type of the data, can be "force", "torque", or "all". Defaults to "all".
+		view (str, optional): view that the graph should be saved in. Defaults to "back".
+		filename (_type_, optional): path to the file to retrieve data from. Defaults to None.
+
+	Returns:
+		np.array: a set of points collected from the data 
+	"""
 	if filename == None:
 		with open(coord_pipe, "rb") as f:
 			points = np.loadtxt(f)
@@ -73,16 +97,15 @@ def plot_gmm(n_components=7, ctype = "all", view="back", filename=None):
 	points[:, 1] = points[:, 1] - 0.2433*2
 	points[:, 2] = points[:, 2] + 0.2712*2
  
- 	#fit the gaussian model
+ 	# Fit the gaussian model
 	gmm = GaussianMixture(n_components=n_components, covariance_type='diag', random_state=0)
 	gmm.fit(points)
 	cls = gmm.predict(points)
-	# print(points.shape)
+	
 	data = visualize_3d_gmm(points, gmm.weights_, gmm.means_[:, :].T, np.sqrt(gmm.covariances_[:, :]).T, cls, ctype=ctype)
 	fig = plot_3d_objects(data, 1, width=800, height=800, view=view)
  
 	if ctype == "force":
-		# fig.update_layout(legend_orientation="h")
 		fig.update_layout(legend=dict(
 			yanchor="bottom",
 			y=0.5,
@@ -143,77 +166,20 @@ print("should be different:")
 print(distributions_js(st.norm(loc=10000), st.norm(loc=0)))
 print("should be same:")
 print(distributions_js(st.norm(loc=0), st.norm(loc=0)))
-
-def SelBest(arr:list, X:int)->list:
-	'''
-	returns the set of X configurations with shorter distance
-	'''
-	dx=np.argsort(arr)[:X]
-	return arr[dx]
-
-
-def get_silhouette(X, iterations = 20, n_cluster=10):
-	n_clusters=np.arange(2, n_cluster)
-	sils=[]
-	sils_err=[]
-	for n in tqdm(n_clusters):
-		tmp_sil=[]
-		for _ in tqdm(range(iterations)):
-			gmm=GaussianMixture(n, n_init=2).fit(X) 
-			labels=gmm.predict(X)
-			sil=metrics.silhouette_score(X, labels, metric='euclidean')
-			tmp_sil.append(sil)
-		val=np.mean(SelBest(np.array(tmp_sil), int(iterations/5)))
-		err=np.std(tmp_sil)
-		sils.append(val)
-		sils_err.append(err)
-
-	plt.figure()
-	plt.errorbar(n_clusters, sils, yerr=sils_err)
-	plt.title("Silhouette Scores", fontsize=20)
-	plt.xticks(n_clusters)
-	plt.xlabel("N. of clusters")
-	plt.ylabel("Score")
-
-def gmm_js(gmm_p, gmm_q, n_samples=10**5):
-	X = gmm_p.sample(n_samples)[0]
-	log_p_X = gmm_p.score_samples(X)
-	log_q_X = gmm_q.score_samples(X)
-	log_mix_X = np.logaddexp(log_p_X, log_q_X)
-
-	Y = gmm_q.sample(n_samples)[0]
-	log_p_Y = gmm_p.score_samples(Y)
-	log_q_Y = gmm_q.score_samples(Y)
-	log_mix_Y = np.logaddexp(log_p_Y, log_q_Y)
-
-	return np.sqrt((log_p_X.mean() - (log_mix_X.mean() - np.log(2))
-			+ log_q_Y.mean() - (log_mix_Y.mean() - np.log(2))) / 2)
-
-def get_gmm_js(X, iterations = 20, n_cluster=10):
-	n_clusters=np.arange(2, n_cluster)
-	results=[]
-	res_sigs=[]
-	for n in tqdm(n_clusters):
-		dist=[]
-		for iteration in tqdm(range(iterations)):
-			train, test=train_test_split(X, test_size=0.5)
-			gmm_train=GaussianMixture(n, n_init=2).fit(train) 
-			gmm_test=GaussianMixture(n, n_init=2).fit(test) 
-			dist.append(gmm_js(gmm_train, gmm_test))
-		selec=SelBest(np.array(dist), int(iterations/5))
-		result=np.mean(selec)
-		res_sig=np.std(selec)
-		results.append(result)
-		res_sigs.append(res_sig)
-
-	plt.figure()
-	plt.errorbar(n_clusters, results, yerr=res_sigs)
-	plt.title("Distance between Train and Test GMMs", fontsize=20)
-	plt.xticks(n_clusters)
-	plt.xlabel("N. of clusters")
-	plt.ylabel("Distance")
  
 def get_BIC(iterations=20, n_cluster=10, filename=None, ctype="all"): 	
+	"""
+	Get the Bayesian Information Criterion (BIC) score for the data retrieved
+
+	Args:
+		iterations (int, optional): Number of iterations to be used to determine BIC. Defaults to 20.
+		n_cluster (int, optional): Number of Clusters to analyse up to. Defaults to 10.
+		filename (_type_, optional): Path to file to retrieve data from. Defaults to None.
+		ctype (str, optional):  class type of the data, can be "force", "torque", or "all". Defaults to "all".
+
+	Returns:
+		int: returns the optimal number of clusters to split the GMM into
+	"""
 	if filename == None:
 		with open(coord_pipe, "rb") as f:
 			X = np.loadtxt(f)
@@ -257,86 +223,32 @@ def get_BIC(iterations=20, n_cluster=10, filename=None, ctype="all"):
 	plt.xlabel("N. of clusters")
 	plt.ylabel("grad(BIC)")
 	plt.legend()
-	
-	# print(np.log(np.abs(10*np.gradient(bics))))
-
-	# plt.figure()
-	# plt.errorbar(n_clusters, np.log(np.abs(10*np.gradient(bics))), label='BIC')
-	# plt.title("Gradient of gradient of BIC Scores", fontsize=20)
-	# plt.xticks(n_clusters)
-	# plt.xlabel("N. of clusters")
-	# plt.ylabel("grad(BIC)")
-	# plt.legend()
- 
  
 	dbics = np.gradient(bics)
-	print(dbics.min)
 	dbics_range = np.amax(dbics) - np.amin(dbics)
-	print(dbics_range)
 	thres = 0.5
 	for i, val in enumerate(dbics):
 		print(val)
 		if val > (np.amin(dbics) + thres * dbics_range):
 			print("n_clusters:", i+2)
 			return i+2
-	# print("n_clusters:", nc)
  
- 
-
-# data = plot_gmm("force")
-# with open(coord_pipe, "rb") as f:
-# 	data = np.loadtxt(f)
-# data = np.c_[(data[:, :3], np.sum(np.abs(data[:, 3:6])**2,axis=-1)**(1./2))]
-
-# print(data[:4, :3])
-# data[:, 0] = data[:, 0] - 0.5
-# data[:, 1] = data[:, 1] - 0.5
-# data[:, 2] = data[:, 2] + 0.5
-# print(data[:4, :3])
-
-
-# get_silhouette(data, iterations=20)
-# get_gmm_js(data, iterations=20)
-# plt.show()
-# print(datapipe_prefix)
-
 namelist = ["unity1", "unity2", "unity_weak", "four_corners_random", "sides_random", "sides_horizontal", "sides_vertical", "center_random", "center_horizontal", "center_vertical", "full_random", "full_horizontal", "full_vertical"]
 
-# for i, filename in enumerate(namelist):
-# # filename = "sides_horizontal"
-# 	nc = get_BIC(iterations=10, filename=filename, ctype="force")
-# 	# plt.show()
-# 	plot_gmm(n_components=nc, ctype="force", view="back", filename=filename)
-# 	plot_gmm(n_components=nc, ctype="force", view="side", filename=filename)
-# 	plot_gmm(n_components=nc, ctype="force", view="top", filename=filename)
-	
-# 	nc = get_BIC(iterations=10, filename=filename, ctype="torque")
-# 	plot_gmm(n_components=nc, ctype="torque", view="back", filename=filename)
-# 	plot_gmm(n_components=nc, ctype="torque", view="side", filename=filename)
-# 	plot_gmm(n_components=nc, ctype="torque", view="top", filename=filename)
- 
- 
-# 	nc = get_BIC(iterations=10, filename=filename, ctype="all")
-# 	plot_gmm(n_components=nc, ctype="all", view="back", filename=filename)
-# 	plot_gmm(n_components=nc, ctype="all", view="side", filename=filename)
-# 	plot_gmm(n_components=nc, ctype="all", view="top", filename=filename)
-# # # plot_gmm(n_components=5)
-
 for i, filename in enumerate(namelist):
-    
-
-
-# filename = "sides_vertical"
-# # nc = get_BIC(iterations=10, filename=filename)
-# nc=4
-# plt.show()
-# # nc=5
-# plot_gmm(n_components=nc, ctype="force", view="back", filename=filename)
-# plot_gmm(n_components=nc, ctype="force", view="top", filename=filename)
-# plot_gmm(n_components=nc, ctype="force", view="side", filename=filename)
-# plot_gmm(n_components=nc, ctype="torque", view="back", filename=filename)
-# plot_gmm(n_components=nc, ctype="torque", view="top", filename=filename)
-# plot_gmm(n_components=nc, ctype="torque", view="side", filename=filename)
-# plot_gmm(n_components=nc, ctype="all", view="top", filename=filename)
-# plot_gmm(n_components=nc, ctype="all", view="back", filename=filename)
-# plot_gmm(n_components=nc, ctype="all", view="side", filename=filename)
+	nc = get_BIC(iterations=10, filename=filename, ctype="force")
+	# plt.show()
+	plot_gmm(n_components=nc, ctype="force", view="back", filename=filename)
+	plot_gmm(n_components=nc, ctype="force", view="side", filename=filename)
+	plot_gmm(n_components=nc, ctype="force", view="top", filename=filename)
+	
+	nc = get_BIC(iterations=10, filename=filename, ctype="torque")
+	plot_gmm(n_components=nc, ctype="torque", view="back", filename=filename)
+	plot_gmm(n_components=nc, ctype="torque", view="side", filename=filename)
+	plot_gmm(n_components=nc, ctype="torque", view="top", filename=filename)
+ 
+ 
+	nc = get_BIC(iterations=10, filename=filename, ctype="all")
+	plot_gmm(n_components=nc, ctype="all", view="back", filename=filename)
+	plot_gmm(n_components=nc, ctype="all", view="side", filename=filename)
+	plot_gmm(n_components=nc, ctype="all", view="top", filename=filename)

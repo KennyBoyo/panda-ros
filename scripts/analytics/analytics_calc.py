@@ -12,6 +12,9 @@ from analytics_utils import *
 # Ros Subscriber
 # ====================================================================================================================
 class AnalyticsNode:
+	"""
+	ROS Node used to handle parsing data from ROS and recording into text files to be analysed later
+	"""
 	def __init__(self):
 		self.sub = rospy.Subscriber("/os3/step_problem_solution", JointState, self.callback)
 		self.angle_array = np.empty((0,3), np.float64)

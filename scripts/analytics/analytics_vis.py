@@ -76,12 +76,12 @@ def update_graph_live(n):
 	gmm = GaussianMixture(n_components=7, covariance_type='diag', random_state=0)
 	gmm.fit(points)
 	cls = gmm.predict(points)
-	# print(points.shape)
+	
 	data = visualize_3d_gmm(points, gmm.weights_, gmm.means_[:, :].T, np.sqrt(gmm.covariances_[:, :]).T, cls)
 	fig = plot_3d_objects(data, 2, width=1500, height=1500)
 	return fig
 
-# Multiple components can update everytime interval gets fired.
+# Multiple components can update everytime interval gets fired. Alphahull is done on a slow timer because it takes a long time to generate.
 # @app.callback(Output('live-ws', 'figure'),
 # 			Input('timer-slow', 'n_intervals'))
 # def update_graph_ws(n):
