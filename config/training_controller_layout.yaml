@@ -6,13 +6,18 @@
   service: 'assistive_controller/reset_trajectory'
   column: 1
   service_type: 'Trigger'
-- name: '(Master) Selected: Assistance mode enabled'
-  service: 'assistive_controller/assistance_flag'
+- name: 'No Assistance'
+  service: 'assistive_controller/no_assist'
   column: 0
   service_type: 'SetBool'
   default_value: true
-- name: '(Slave) Selected: Tunnel, else: Distance'
-  service: 'assistive_controller/assistance_type'
+- name: 'Assistive Distance Model'
+  service: 'assistive_controller/distance_assist'
   column: 0
   service_type: 'SetBool'
-  default_value: true
+  default_value: false
+- name: 'Assistive Tunnel Model'
+  service: 'assistive_controller/tunnel_assist'
+  column: 0
+  service_type: 'SetBool'
+  default_value: false

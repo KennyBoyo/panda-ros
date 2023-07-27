@@ -5,7 +5,7 @@
 
   <node name="$(anon sample_buttons)"
         pkg="jsk_rqt_plugins" type="rqt_service_buttons" output="screen" clear_params="true">
-    <param name="~layout_yaml_file" value="package://panda_ros/resources/trajectory_recorder_layout.yaml" />
+    <param name="~layout_yaml_file" value="package://panda_ros/config/trajectory_recorder_layout.yaml" />
   </node>
   
 </launch>

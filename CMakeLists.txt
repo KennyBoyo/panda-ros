@@ -129,7 +129,6 @@ catkin_install_python(
   scripts/dual_arm_interactive_marker.py
   scripts/robot_login.py
   scripts/hand_tracking.py
-  scripts/equilibrium_publisher.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

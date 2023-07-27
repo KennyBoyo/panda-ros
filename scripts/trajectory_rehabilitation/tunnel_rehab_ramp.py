@@ -78,28 +78,31 @@ class StiffnessRamp():
 
 
 class TunnelTrajectoryController():
-    def __init__ (self, tunnel_radius: np.double, k_min, k_max, recordFlag: bool):
+    def __init__ (self, tunnel_radius: np.double, ktunnel_min, ktunnel_max, kdistance, recordFlag: bool):
         self.tunnel_radius = tunnel_radius
         self.hone_dist = tunnel_radius/2
         self.record_data = recordFlag
 
-        self.stiffness_limits = (k_min, k_max)
+        self.stiffness_limits = (ktunnel_min, ktunnel_max)
+        self.stiffness_distance = kdistance
         self.currentState = STARTING_STATE
         self.previousStiffness = np.zeros((6,6))
         self.pn_idx = 0
         self.trajectory_id = 0
 
-        self.f_fault_tolerance_stiffness = lambda d : k_min + ((k_max - k_min)/tunnel_radius)*(d-tunnel_radius)
+        self.f_fault_tolerance_stiffness = lambda d : ktunnel_min + ((ktunnel_max - ktunnel_min)/tunnel_radius)*(d-tunnel_radius)
         self.setup_marker_message()
 
         self.pbServices = [rospy.Service('assistive_controller/next_trajectory', Trigger, self.pb_next_trajectory_handler),
                            rospy.Service('assistive_controller/reset_trajectory', Trigger, self.pb_reset_trajectory_handler),
-                           rospy.Service('assistive_controller/assistance_flag', SetBool, self.pbs_assistance_flag_handler),
-                           rospy.Service('assistive_controller/assistance_type', SetBool, self.pbs_assistance_type_handler)]
+                           rospy.Service('assistive_controller/no_assist', SetBool, self.pb_no_assist_handler),
+                           rospy.Service('assistive_controller/distance_assist', SetBool, self.pb_distance_assist_handler),
+                           rospy.Service('assistive_controller/tunnel_assist', SetBool, self.pb_tunnel_assist_handler)]
+        
         self.assistanceMode = TUNNEL_ASSIST
         # Assistance_flag(0th element) - ON: Assistance mode enabled.
         # Assistance_type(1st element) - OFF: Distance based, ON: Tunnel based.
-        self.pbAssistanceStates = [True, True]
+        self.pbAssistanceSelection = np.full((3,1), False)
         self.pbNextTrajectoryState = False
         self.pbResetTrajectoryState = False
         
@@ -184,7 +187,7 @@ class TunnelTrajectoryController():
                 rospy.logwarn_throttle(2 ,f"Please hone EFF: {p_delta*1e3} millimeters away. Control pose of EFF.")
 
                 if p_delta < self.hone_dist:
-                    mode_repr = self.get_assistance_mode()
+                    self.set_assistance_mode()
                     rospy.loginfo(f"EFF honed. Ramping up.")
                     self.currentState = RAMPING_UP_STATE
 
@@ -197,7 +200,7 @@ class TunnelTrajectoryController():
                         self.currentRamp = StiffnessRamp(np.zeros((6,6)), desired_ramp, self.honing_pose)
                     
                     elif self.assistanceMode == DISTANCE_ASSIST:
-                        desired_ramp = np.diag([1,1,1,0,0,0]) * np.mean(self.stiffness_limits)
+                        desired_ramp = np.diag([1,1,1,0,0,0]) * self.stiffness_distance
                         desired_ramp[3:, 3:] = np.eye(3) * TRAINING_ROTATIONAL_STIFFNESS
                         self.currentRamp = StiffnessRamp(np.zeros((6,6)), desired_ramp, self.honing_pose)
 
@@ -265,11 +268,15 @@ class TunnelTrajectoryController():
     def pb_next_trajectory_handler(self, req):
         self.pbNextTrajectoryState = True
         return TriggerResponse(success=True)
-    def pbs_assistance_flag_handler(self, req: SetBoolRequest):
-        self.pbAssistanceStates[0] = req.data
+    
+    def pb_no_assist_handler(self, req: SetBoolRequest):
+        self.pbAssistanceSelection[0] = req.data
         return SetBoolResponse(success=True)
-    def pbs_assistance_type_handler(self, req: SetBoolRequest):
-        self.pbAssistanceStates[1] = req.data
+    def pb_distance_assist_handler(self, req: SetBoolRequest):
+        self.pbAssistanceSelection[1] = req.data
+        return SetBoolResponse(success=True)
+    def pb_tunnel_assist_handler(self, req: SetBoolRequest):
+        self.pbAssistanceSelection[2] = req.data
         return SetBoolResponse(success=True)
     def pb_reset_trajectory_handler(self, req):
         self.pbResetTrajectoryState = True
@@ -280,20 +287,20 @@ class TunnelTrajectoryController():
         if np.all(self.honing_queue):
             return np.mean(self.honing_queue)
 
-    def get_assistance_mode(self):
-        self.assistanceMode = NO_ASSIST
-        mode_repr = "NO_ASSIST"
-        if self.pbAssistanceStates[0]:
+    def set_assistance_mode(self):
+        
+        if self.pbAssistanceSelection.sum() != 1:
+            rospy.logerr("No/greater than one mode selected. Using NO_ASSIST.")
+            self.assistanceMode = NO_ASSIST
+        
+        elif self.pbAssistanceSelection[0]:
+            self.assistanceMode = NO_ASSIST
 
-            if self.pbAssistanceStates[1]:
-                self.assistanceMode = TUNNEL_ASSIST
-                mode_repr = "TUNNEL_ASSIST"
-            
-            else:
+        elif self.pbAssistanceSelection[1]:
                 self.assistanceMode = DISTANCE_ASSIST
-                mode_repr = "DISTANCE_ASSIST"
 
-        return mode_repr
+        elif self.pbAssistanceSelection[2]:
+                self.assistanceMode = TUNNEL_ASSIST
     
     def initialise_new_trajectory(self):
         self.trajectory_path: Path
@@ -384,7 +391,7 @@ class TunnelTrajectoryController():
     def get_distance_model_update_parameters(self, d: np.double, p_min, p_current):
         
         # Overall assistance 
-        return K_default * 300, p_min
+        return K_default * self.stiffness_distance, p_min
             
     def publish_update_parameters(self, pose_update: PoseStamped, stiffness_update):
         
@@ -405,8 +412,18 @@ class TunnelTrajectoryController():
         self.stiffnessParams_pub.publish(new_stiffness)
 
 if __name__ == "__main__":
-    rospy.init_node("assistive_rehab")
+    rospy.init_node("rehabilitation_train")
+    
     recordFlag = rospy.get_param('~record_bag')
-
-    ctrl = TunnelTrajectoryController(tunnel_radius=0.02, k_min=15, k_max = 400, recordFlag=recordFlag)
+    KTunnel_min = rospy.get_param('~k_tunnel_min')
+    KTunnel_max = rospy.get_param('~k_tunnel_max')
+    RTunnel = rospy.get_param('~r_tunnel')
+    KDistance = rospy.get_param('~k_distance')
+    
+    print(RTunnel, type(RTunnel))
+    ctrl = TunnelTrajectoryController(tunnel_radius = RTunnel, 
+                                        ktunnel_min = KTunnel_min,
+                                        ktunnel_max = KTunnel_max,
+                                        kdistance = KDistance,
+                                        recordFlag=recordFlag)
     rospy.spin()

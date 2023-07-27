@@ -1,13 +1,21 @@
 <launch>
-  <arg name="record_bag" default="true"/>
-  <node name="training_controller" pkg="panda_ros" type="tunnel_rehab_ramp.py"
-        output="screen">
-    <param name="record_bag" value = "($arg record_bag)"/>
+  <arg name="record_bag" default="false"/>
+  <arg name="k_tunnel_min" default="15"/>
+  <arg name="k_tunnel_max" default="400"/>
+  <arg name="r_tunnel" default="0.02"/>
+  <arg name="k_distance" default="250"/>
+
+  <node name="training_controller" pkg="panda_ros" type="tunnel_rehab_ramp.py" output="screen">
+    <param name="record_bag" value = "$(arg record_bag)"/>
+    <param name="k_tunnel_min" value = "$(arg k_tunnel_min)"/>
+    <param name="k_tunnel_max" value = "$(arg k_tunnel_max)"/>
+    <param name="r_tunnel" value = "$(arg r_tunnel)"/>
+    <param name="k_distance" value = "$(arg k_distance)"/>
   </node>
 
   <node name="$(anon sample_buttons)"
         pkg="jsk_rqt_plugins" type="rqt_service_buttons" output="screen" clear_params="true">
-    <param name="~layout_yaml_file" value="package://panda_ros/resources/training_controller_layout.yaml" />
+    <param name="~layout_yaml_file" value="package://panda_ros/config/training_controller_layout.yaml" />
   </node>
 
   <node pkg="rosbag" type="record" name="training_rosbag" if="$(arg record_bag)"
