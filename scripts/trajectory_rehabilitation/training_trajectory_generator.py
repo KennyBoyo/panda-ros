@@ -11,6 +11,8 @@ from nav_msgs.msg import Path
 from std_srvs.srv import Trigger, TriggerResponse
 
 from panda_ros.srv import *
+from collections import deque
+
 
 PARENT_FRAME = 'panda_link0'
 p0 = np.asarray([ 0.4, -0.2,  0.3])
@@ -30,7 +32,7 @@ class TrainingTrajectoryHandler():
             rospy.Service('trajectory_generation/confirm', Trigger, self.pb_confirm_handler),
         ]
 
-		self.trajectories = [] 
+		self.trajectories = deque()
 		self.isRecording = False
 		self.confirmFlag = False
 		self.pbStates = {
@@ -44,6 +46,9 @@ class TrainingTrajectoryHandler():
 		self.pathMsg = Path()
 		self.pathMsg.header.frame_id = PARENT_FRAME
 		self.prev_pos = np.zeros((3,1))
+		
+		# Launch service with trajectories
+		self.trajectory_server = TrajectoryServer(self.trajectories, PARENT_FRAME)
 
 	def pb_start_handler(self, req):
 		self.pbStates['record'] = True
@@ -74,7 +79,7 @@ class TrainingTrajectoryHandler():
 					self.confirmFlag = True
 					self.pbStates['confirm'] = False
 				else:
-					self.launch_server()
+					self.confirm_server()
 					
 		if self.pbStates['record']:
 			self.confirmFlag = False
@@ -113,7 +118,7 @@ class TrainingTrajectoryHandler():
 	def publish_trajectory(self, trajectory):
 		self.trajectory_publisher.publish(trajectory)
 	
-	def launch_server(self):
+	def confirm_server(self):
 		# Disable current subscribers etc
 
 		rospy.logwarn(f"Closing handler with {len(self.trajectories)} trajectory(ies).")
@@ -121,14 +126,14 @@ class TrainingTrajectoryHandler():
 		for service in self.pbServices:
 			service.shutdown("Closing pb services")
 
-		# Launch server node with trajectories
-		self.trajectory_server = TrajectoryServer(self.trajectories, PARENT_FRAME)
+		self.trajectory_server.lock_trajectories()
 
 
 class TrajectoryServer():
-	def __init__(self, trajectories: list, frame_id: str = PARENT_FRAME):
+	def __init__(self, trajectories: deque, frame_id: str = PARENT_FRAME):
 		self.trajectories = trajectories
 		self.frame_id = frame_id
+		self.confirm = False
 		self.server = rospy.Service("training_trajectory_server", TrainingTrajectory, self.get_trajectory)
 		rospy.on_shutdown(self.shutdown_callback)
 
@@ -136,15 +141,18 @@ class TrajectoryServer():
 		
 		response = TrainingTrajectoryResponse()
 		response.trajectoryAvailable = False
-
+		
+		num = len(self.trajectories)
 		if req.base_frame == self.frame_id:
-			if len(self.trajectories):
+			if self.confirm and num > 0:
 				response.trajectoryAvailable = True
-				response.trajectory = self.trajectories.pop(0)
-				# print(type(self.trajectories[0]))
-				rospy.loginfo("Trajectory response with valid trajectory sent.")
+				response.trajectory = self.trajectories.popleft()
+				rospy.loginfo(f"Trajectory sent. {num-1} left.")
 
 		return response
+	
+	def lock_trajectories(self):
+		self.confirm = True
 	def shutdown_callback(self):
 		self.server.shutdown()
 		 

@@ -1,0 +1,8 @@
+<launch>
+  <arg name="record_bag" default="true"/>
+  <arg name="record_path" default="/home/medrobotics/Documents/ShankerThesis/rosbags/"/>
+
+  <node pkg="rosbag" type="record" name="training_rosbag" if="$(arg record_bag)"
+    args="record -o $(arg record_path) assistive_controller/status"/>
+
+</launch>

@@ -4,6 +4,7 @@
   <arg name="k_tunnel_max" default="400"/>
   <arg name="r_tunnel" default="0.02"/>
   <arg name="k_distance" default="250"/>
+  <arg name="record_path" default="/home/medrobotics/Documents/ShankerThesis/rosbags/"/>
 
   <node name="training_controller" pkg="panda_ros" type="tunnel_rehab_ramp.py" output="screen">
     <param name="record_bag" value = "$(arg record_bag)"/>
@@ -11,6 +12,7 @@
     <param name="k_tunnel_max" value = "$(arg k_tunnel_max)"/>
     <param name="r_tunnel" value = "$(arg r_tunnel)"/>
     <param name="k_distance" value = "$(arg k_distance)"/>
+    <param name="record_path" value = "$(arg record_path)"/>
   </node>
 
   <node name="$(anon sample_buttons)"
@@ -18,7 +20,7 @@
     <param name="~layout_yaml_file" value="package://panda_ros/config/training_controller_layout.yaml" />
   </node>
 
-  <node pkg="rosbag" type="record" name="training_rosbag" if="$(arg record_bag)"
-    args="record -o /home/medrobotics/Documents/ShankerThesis/rosbags/today assistive_controller/status"/>
+  <!-- <node pkg="rosbag" type="record" name="training_rosbag" if="$(arg record_bag)"
+    args="record -o $(arg record_path) assistive_controller/status"/> -->
 
 </launch>

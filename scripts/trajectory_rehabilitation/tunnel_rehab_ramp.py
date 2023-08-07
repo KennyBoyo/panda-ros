@@ -14,6 +14,7 @@ from std_srvs.srv import Trigger, TriggerResponse, SetBoolResponse, SetBool, Set
 from panda_ros.srv import *
 from visualization_msgs.msg import Marker
 from msg_utils import *
+import os
 
 PARENT_FRAME = "panda_link0"
 
@@ -78,7 +79,7 @@ class StiffnessRamp():
 
 
 class TunnelTrajectoryController():
-    def __init__ (self, tunnel_radius: np.double, ktunnel_min, ktunnel_max, kdistance, recordFlag: bool):
+    def __init__ (self, tunnel_radius: np.double, ktunnel_min, ktunnel_max, kdistance, recordFlag: bool, record_path: str):
         self.tunnel_radius = tunnel_radius
         self.hone_dist = tunnel_radius/2
         self.record_data = recordFlag
@@ -90,6 +91,7 @@ class TunnelTrajectoryController():
         self.pn_idx = 0
         self.trajectory_id = 0
 
+        self.recordPath = record_path
         self.f_fault_tolerance_stiffness = lambda d : ktunnel_min + ((ktunnel_max - ktunnel_min)/tunnel_radius)*(d-tunnel_radius)
         self.setup_marker_message()
 
@@ -99,9 +101,8 @@ class TunnelTrajectoryController():
                            rospy.Service('assistive_controller/distance_assist', SetBool, self.pb_distance_assist_handler),
                            rospy.Service('assistive_controller/tunnel_assist', SetBool, self.pb_tunnel_assist_handler)]
         
-        self.assistanceMode = TUNNEL_ASSIST
-        # Assistance_flag(0th element) - ON: Assistance mode enabled.
-        # Assistance_type(1st element) - OFF: Distance based, ON: Tunnel based.
+        self.assistanceMode = NO_ASSIST
+
         self.pbAssistanceSelection = np.full((3,1), False)
         self.pbNextTrajectoryState = False
         self.pbResetTrajectoryState = False
@@ -233,7 +234,7 @@ class TunnelTrajectoryController():
             min_idx, p_min, d_min = self.nearest_point_on_trajectory(p_current, 5)
             deviation_ratio = d_min/(2*self.tunnel_radius)
 
-            # Get desired stiffness based on assitance mode. 
+            # Get desired stiffness based on assistance mode. 
             if self.assistanceMode == DISTANCE_ASSIST:
                 desired_stiffness, p_reference = self.get_distance_model_update_parameters(d_min, p_min, p_current)    
             elif self.assistanceMode == TUNNEL_ASSIST:
@@ -313,7 +314,9 @@ class TunnelTrajectoryController():
         
         self.trajectory_positions = np.vstack(positions)
         self.trajectory_id = np.random.randint(1000)
-        np.save(f"/home/medrobotics/Documents/ShankerThesis/rosbags/{self.trajectory_id}.npy", self.trajectory_positions)
+        
+        # Save new desired path in the paths folder of the directory specified
+        np.save(os.path.join(self.recordPath, "path_data", "{self.trajectory_id}.npy"), self.trajectory_positions)
 
         # Publish first pose for EFF honing
         honePose = deepcopy(self.trajectory_path)
@@ -419,11 +422,12 @@ if __name__ == "__main__":
     KTunnel_max = rospy.get_param('~k_tunnel_max')
     RTunnel = rospy.get_param('~r_tunnel')
     KDistance = rospy.get_param('~k_distance')
-    
-    print(RTunnel, type(RTunnel))
+    recordPath = rospy.get_param('~record_path')
+
     ctrl = TunnelTrajectoryController(tunnel_radius = RTunnel, 
                                         ktunnel_min = KTunnel_min,
                                         ktunnel_max = KTunnel_max,
                                         kdistance = KDistance,
-                                        recordFlag=recordFlag)
+                                        recordFlag=recordFlag,
+                                        record_path=recordPath)
     rospy.spin()
